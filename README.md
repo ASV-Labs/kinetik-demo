@@ -23,3 +23,5 @@ The server listens on `PORT` or `3000`.
 - `GET /health` returns a liveness check.
 - `GET /api/releases` returns release records.
 - `GET /api/readiness` returns scored release-readiness summaries.
+- `POST /api/releases/approve` approves the current release when called with
+  a demo reviewer or owner bearer token.
