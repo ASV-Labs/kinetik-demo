@@ -1,0 +1,15 @@
+{
+  "name": "release-radar",
+  "version": "1.0.0",
+  "description": "Small public sample app for Kinetik Triage release analysis",
+  "type": "module",
+  "private": false,
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20 <23"
+  }
+}
+
