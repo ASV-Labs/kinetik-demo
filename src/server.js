@@ -1,4 +1,6 @@
 import http from "node:http";
+import { recordReleaseAudit } from "./audit-log.js";
+import { requireReleaseApprover } from "./auth.js";
 import { summarizeReadiness } from "./readiness.js";
 import { listReleases } from "./releases.js";
 
@@ -16,6 +18,21 @@ export function createServer() {
 
     if (request.url === "/api/readiness") {
       return sendJson(response, 200, { readiness: summarizeReadiness(listReleases()) });
+    }
+
+    if (request.method === "POST" && request.url === "/api/releases/approve") {
+      const access = requireReleaseApprover(request);
+      if (!access.allowed) {
+        return sendJson(response, access.status, { error: access.error });
+      }
+
+      const [release] = listReleases();
+      const auditEvent = recordReleaseAudit(
+        { ...release, status: "approved" },
+        "release.approve",
+        access.session.userId
+      );
+      return sendJson(response, 202, { releaseId: release.id, auditEvent });
     }
 
     return sendJson(response, 404, { error: "not_found" });
