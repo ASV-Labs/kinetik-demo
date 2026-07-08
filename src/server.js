@@ -1,6 +1,7 @@
 import http from "node:http";
 import { recordReleaseAudit } from "./audit-log.js";
 import { requireReleaseApprover } from "./auth.js";
+import { buildCustomerBrief } from "./customer-brief.js";
 import { summarizeReadiness } from "./readiness.js";
 import { listReleases } from "./releases.js";
 
@@ -18,6 +19,10 @@ export function createServer() {
 
     if (request.url === "/api/readiness") {
       return sendJson(response, 200, { readiness: summarizeReadiness(listReleases()) });
+    }
+
+    if (request.url === "/api/customer-brief") {
+      return sendJson(response, 200, { brief: buildCustomerBrief(listReleases()[0]) });
     }
 
     if (request.method === "POST" && request.url === "/api/releases/approve") {
