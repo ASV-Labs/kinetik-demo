@@ -41,3 +41,20 @@ test("requires auth before approving releases", async () => {
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("serves the customer brief", async () => {
+  const server = createServer();
+  await new Promise((resolve) => server.listen(0, resolve));
+
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/api/customer-brief`);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.brief.audience, "customer_success");
+    assert.equal(body.brief.citations.length, 2);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
