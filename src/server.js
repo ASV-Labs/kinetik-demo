@@ -1,4 +1,5 @@
 import http from "node:http";
+import { summarizeReadiness } from "./readiness.js";
 import { listReleases } from "./releases.js";
 
 const port = Number(process.env.PORT ?? 3000);
@@ -11,6 +12,10 @@ export function createServer() {
 
     if (request.url === "/api/releases") {
       return sendJson(response, 200, { releases: listReleases() });
+    }
+
+    if (request.url === "/api/readiness") {
+      return sendJson(response, 200, { readiness: summarizeReadiness(listReleases()) });
     }
 
     return sendJson(response, 404, { error: "not_found" });
@@ -27,4 +32,3 @@ if (process.argv[1] && process.argv[1].endsWith("server.js")) {
     console.log(`Release Radar listening on ${port}`);
   });
 }
-

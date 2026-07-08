@@ -18,3 +18,8 @@ npm start
 
 The server listens on `PORT` or `3000`.
 
+## Endpoints
+
+- `GET /health` returns a liveness check.
+- `GET /api/releases` returns release records.
+- `GET /api/readiness` returns scored release-readiness summaries.
