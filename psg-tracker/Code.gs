@@ -691,7 +691,7 @@ function addTrackerTable(name, columns, purpose) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Close & restart the DA 6s (AR 220-45 para 2a: "To" date = last detail; new roster brings numbers forward)
+// Close & restart the DA 6s (DA PAM 220-45 para 5a: "To" = last detail, new "From" = next day; numbers carry forward)
 // ---------------------------------------------------------------------------------------------
 function closeRosters() {
   var ui = SpreadsheetApp.getUi();
@@ -755,7 +755,7 @@ function rebuildCharts() {
   var palette = ['#2A78D6', '#EB6834', '#1BAF7A', '#EDA100', '#E87BA4', '#008300', '#6250D6', '#E34948'];
   var specs = [
     { type: Charts.ChartType.COLUMN, range: 'A4:G12', title: 'G2 duty details by section', row: 39, col: 2, stacked: true,
-      colors: palette.slice(0, 5) },
+      colors: palette.slice(0, ROSTERS.length) },
     { type: Charts.ChartType.COLUMN, range: ['H4:H10', 'J4:K10'], title: 'This month: filled vs open G2 slots', row: 45,
       col: 9, stacked: true, colors: ['#2A78D6', '#C9CED6'] },
     { type: Charts.ChartType.LINE, range: 'O4:P34', title: 'Soldiers unavailable, next 30 days', row: 57, col: 2,
