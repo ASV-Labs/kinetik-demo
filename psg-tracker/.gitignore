@@ -1,0 +1,4 @@
+# real roster data (names, exemptions, phones) never leaves the PSG's machine/Drive
+seed_data_private.py
+*.xlsx
+__pycache__/
