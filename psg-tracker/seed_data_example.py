@@ -200,7 +200,8 @@ RANKS = [
 # roster key, tab, min order, max order, nature of duty
 ROSTERS = [
     ("CQ NCO", "DA6 CQ NCO", 5, 6, "Charge of Quarters NCO (CPL-SGT)"),
-    ("RUNNER", "DA6 RUNNER", 1, 4, "CQ Runner + Staff Duty Runner, combined (PVT-SPC)"),
+    ("CQ RUNNER", "DA6 CQ RUNNER", 1, 4, "Charge of Quarters Runner (PVT-SPC)"),
+    ("SD RUNNER", "DA6 SD RUNNER", 1, 4, "Staff Duty Runner (PVT-SPC)"),
     ("SDNCO", "DA6 SDNCO", 7, 8, "Staff Duty NCO (SSG-SFC)"),
     ("FLAG", "DA6 FLAG", 1, 8, "Flag Detail (PVT-SFC)"),
     ("ROAD GUARD", "DA6 ROAD GUARD", 1, 6, "Road Guard Detail (PVT-SGT)"),
@@ -209,9 +210,9 @@ ROSTERS = [
 # duty type (what the BDE roster calls it) -> DA 6 roster key
 DUTY_TYPES = [
     ("CQ NCO", "CQ NCO", "Charge of Quarters NCO"),
-    ("CQ Runner", "RUNNER", "Shares the combined runner DA 6"),
+    ("CQ Runner", "CQ RUNNER", "Own DA 6; coded D on SD RUNNER when tasked nearby"),
     ("SD NCO", "SDNCO", "Staff Duty NCO"),
-    ("SD Runner", "RUNNER", "Shares the combined runner DA 6"),
+    ("SD Runner", "SD RUNNER", "Own DA 6; coded D on CQ RUNNER when tasked nearby"),
     ("Flag Detail", "FLAG", "Enter team start date + end date"),
     ("Road Guard", "ROAD GUARD", "Road guard detail"),
     ("SD OIC (Officer)", "N/A", "Logged for visibility, no NCO DA 6"),
@@ -222,7 +223,8 @@ DUTY_TYPES = [
 ABSENCE_TYPES = [
     ("Leave", "A", "Y", "Ordinary / emergency leave"),
     ("Pass", "A", "Y", "Regular or special pass"),
-    ("TDY / Mission Support", "A", "Y", "TDY, mission support, external tasking"),
+    ("TDY / Mission Support", "A", "Y", "TDY, mission support, external tasking (beyond duty hours)"),
+    ("TDY - duty hours only", "", "N", "DA PAM 220-45 7c(1) note: TDY ending by close of business is not an A"),
     ("School / Training", "A", "Y", "NCOES, courses, training events (e.g. TT26)"),
     ("Appointment", "A", "Y", "Medical / dental / admin appointment"),
     ("Medical / Quarters", "A", "Y", "Sick call, quarters, profile (in line of duty)"),
@@ -231,7 +233,8 @@ ABSENCE_TYPES = [
     ("Special Duty", "A", "Y", "Authorized special duty (e.g. watch floor)"),
     ("Duty Exempt", "A", "Y", "Command-approved exemption"),
     ("Other Detail", "D", "Y", "Other duty / detail: number continues"),
-    ("Misconduct / AWOL", "U", "Y", "AWOL, arrest, confinement, sick not LOD: number continues"),
+    ("Misconduct / AWOL", "U", "Y", "AWOL, arrest, confinement, illness not in LOD: number continues"),
+    ("Extra duty / restriction (Art. 15)", "U", "Y", "Own misconduct (DA PAM 220-45 7c(3)); never post extra duty as a DA 6 detail"),
     ("Request (non-binding)", "", "N", "Soldier request: flagged only, never blocks"),
 ]
 

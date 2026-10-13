@@ -44,6 +44,19 @@ BOX = Border(left=thin, right=thin, top=thin, bottom=thin)
 
 ROSTER_KEYS = [r[0] for r in S.ROSTERS]
 ROSTER_ARR = "{" + ",".join('"%s"' % k for k in ROSTER_KEYS) + "}"
+NR = len(S.ROSTERS)
+# Personnel layout: A-I typed, then one BF # column per roster, grade/order/status, one eligibility column
+# per roster, then details / last / next (all computed)
+PC_BF = 10
+PC_GRADE = PC_BF + NR
+PC_ORD, PC_STAT, PC_ELIG = PC_GRADE + 1, PC_GRADE + 2, PC_GRADE + 3
+PC_DET = PC_ELIG + NR
+PC_LAST, PC_NEXT = PC_DET + 1, PC_DET + 2
+L_ORD, L_STAT, L_DET, L_LAST, L_NEXT = (CL(c) for c in (PC_ORD, PC_STAT, PC_DET, PC_LAST, PC_NEXT))
+L_E1, L_E2 = CL(PC_ELIG), CL(PC_ELIG + NR - 1)
+# Next Up: one 6-column block per roster
+NU_W = 6
+NU_LAST = CL(NU_W * NR - 1)
 
 # ----------------------------------------------------------------------------
 # Range tokens (bounded ranges keep recalculation fast)
@@ -64,8 +77,8 @@ T = {
     "AV_M": f"{AV}$M$4:$M${AVN}",
     "PE_A": f"{PE}$A$4:$A${PEN}", "PE_B": f"{PE}$B$4:$B${PEN}", "PE_BC": f"{PE}$B$4:$C${PEN}",
     "PE_C": f"{PE}$C$4:$C${PEN}", "PE_D": f"{PE}$D$4:$D${PEN}", "PE_E": f"{PE}$E$4:$E${PEN}",
-    "PE_H": f"{PE}$H$4:$H${PEN}", "PE_P": f"{PE}$P$4:$P${PEN}", "PE_Q": f"{PE}$Q$4:$Q${PEN}",
-    "PE_RV": f"{PE}$R$4:$V${PEN}", "PE_W": f"{PE}$W$4:$W${PEN}",
+    "PE_H": f"{PE}$H$4:$H${PEN}", "PE_ORD": f"{PE}${L_ORD}$4:${L_ORD}${PEN}",
+    "PE_ELIG": f"{PE}${L_E1}$4:${L_E2}${PEN}", "PE_DET": f"{PE}${L_DET}$4:${L_DET}${PEN}",
     "START": f"{ST}$B$4", "REST": f"{ST}$B$5", "TIE": f"{ST}$B$6", "UNIT": f"{ST}$B$7",
     "ASOF": f"{ST}$B$9", "LOOK": f"{ST}$B$10", "CYCLE": f"{ST}$B$11", "PSG": f"{ST}$B$12",
     "HOL": f"{ST}$Y$4:$Y$60", "RANKTBL": f"{ST}$E$4:$H$40", "DUTYTBL": f"{ST}$P$4:$Q$30",
@@ -177,12 +190,12 @@ for k, v in TAB_COLOR.items():
 ws = WS["Settings"]
 banner(ws, "SETTINGS · lists, rules and lookups",
        "Edit values in white cells. Every tab reads from here: rank bands per DA 6, duty types, "
-       "absence codes (AR 220-45: A / D / U only), holidays and the tracker registry.", 35)
+       "absence codes (DA PAM 220-45 para 7c: A / D / U only), holidays and the tracker registry.", 35)
 header_row(ws, 3, ["Setting", "Value", "Notes"])
 settings_rows = [
-    ("Roster FROM date", date(2026, 10, 1), "First posting date counted on every DA 6 (AR 220-45 para 2a). Tracker history starts 1 Oct 26."),
+    ("Roster FROM date", date(2026, 10, 1), "First posting date counted on every DA 6 (DA PAM 220-45 para 5a). Tracker history starts 1 Oct 26."),
     ("Rest window (days)", 1, "A Soldier with any other G2 duty within +/- this many days is coded D and is not suggested."),
-    ("Tie-break (equal numbers)", "Roster order", "AR 220-45 is silent on ties. 'Roster order' = senior/alphabetical as listed; 'Junior first' = lowest grade first."),
+    ("Tie-break (equal numbers)", "Roster order", "DA PAM 220-45 is silent on ties. 'Roster order' = senior/alphabetical as listed; 'Junior first' = lowest grade first."),
     ("Unit label on BDE roster", "G2", "Slots labeled with this section/unit are G2's to fill (used by the importer)."),
     ("As-of date override", None, "Leave blank to use TODAY(). Set a date to brief 'as of' a specific day."),
     ("As-of date (in use)", "=IF(B8=\"\",TODAY(),B8)", "Computed: drives every status, KPI and chart."),
@@ -241,15 +254,16 @@ for i, (d, n) in enumerate(S.HOLIDAYS, start=4):
     ws.cell(row=i, column=25, value=d).number_format = "ddd dd mmm yy"
     ws.cell(row=i, column=26, value=n)
 # codes legend AB:AC
-for i, h in enumerate(["DA 6 entry", "Meaning (AR 220-45 para 4c, 8)"]):
+for i, h in enumerate(["DA 6 entry", "Meaning (DA PAM 220-45 paras 6, 7, 10, 11)"]):
     ws.cell(row=3, column=28 + i, value=h)
 legend = [
     ("0", "Performed the duty on this date (green). Numbering restarts after it."),
     ("number", "Details made from this roster since the Soldier was last detailed."),
     ("A", "Not available: leave, pass, SD, TDY, illness in LOD, any authorized reason. Numbering is interrupted (paused)."),
+    ("A + number", "First column of a new DA 6 for a Soldier still in A status: last number carried over (para 7c(1))."),
     ("D + number", "Eligible but not selectable because of a previous detail or other duty. Numbering continues."),
     ("U + number", "Not available through own misconduct (AWOL, arrest, confinement, sick not LOD). Numbering continues."),
-    ("red column", "Weekend or holiday posting (para 9b)."),
+    ("red column", "Weekend or holiday posting (para 11b)."),
 ]
 for i, (a, b) in enumerate(legend, start=4):
     ws.cell(row=i, column=28, value=a)
@@ -280,17 +294,16 @@ ws.freeze_panes = "A4"
 # PERSONNEL
 # ============================================================================
 ws = WS["Personnel"]
-P_HEAD = ["Section", "Name (LAST, FIRST)", "Rank", "Status", "DA6 Exclude (Y)", "Exclusion reason",
-          "Phone", "Email", "Notes", "BF # CQ NCO", "BF # RUNNER", "BF # SDNCO", "BF # FLAG",
-          "BF # ROAD GUARD", "Grade", "Rank order", "Status today", "CQ NCO", "RUNNER", "SDNCO",
-          "FLAG", "ROAD GUARD", "Details (total)", "Last detail", "Next detail"]
-P_AUTO = set(P_HEAD[14:])
+P_HEAD = (["Section", "Name (LAST, FIRST)", "Rank", "Status", "DA6 Exclude (Y)", "Exclusion reason",
+           "Phone", "Email", "Notes"] + [f"BF # {k}" for k in ROSTER_KEYS]
+          + ["Grade", "Rank order", "Status today"] + ROSTER_KEYS + ["Details (total)", "Last detail", "Next detail"])
+P_AUTO = set(P_HEAD[PC_GRADE - 1:])
 banner(ws, "PERSONNEL · G2 master roster",
        "Single source of truth for every DA 6. Navy headers = you type; grey headers = automatic. "
        "Rank bands come from Settings. 'BF #' = brought-forward number from a previous DA 6 (leave 0 if unknown). "
-       "Set Status to Departed or Exclude = Y to drop a Soldier from all DA 6s.", 25)
+       "Set Status to Departed or Exclude = Y (with a reason, DA PAM 220-45 para 10c) to drop a Soldier from all DA 6s.", PC_NEXT)
 header_row(ws, 3, P_HEAD, P_AUTO,
-           [11, 30, 7, 11, 9, 22, 14, 24, 24, 8, 8, 8, 8, 8, 7, 7, 26, 8, 8, 8, 8, 8, 9, 11, 11])
+           [11, 30, 7, 11, 9, 22, 14, 24, 24] + [8] * NR + [7, 7, 26] + [8] * NR + [9, 11, 11])
 for i, (sec, name, rank, phone) in enumerate(S.PERSONNEL, start=4):
     ws.cell(row=i, column=1, value=sec)
     ws.cell(row=i, column=2, value=name)
@@ -301,36 +314,36 @@ for i, (sec, name, rank, phone) in enumerate(S.PERSONNEL, start=4):
     if name == S.PSG_NAME:
         ws.cell(row=i, column=9, value="PSG")
 r1, r2 = 4, PEN
-ws["O4"] = F('=MAP(C4:C<N>,LAMBDA(r,IF(r="","",IFERROR(VLOOKUP(r,<RANKTBL>,2,FALSE),"?"))))', N=r2)
-ws["P4"] = F('=MAP(C4:C<N>,LAMBDA(r,IF(r="","",IFERROR(VLOOKUP(r,<RANKTBL>,3,FALSE),""))))', N=r2)
-ws["Q4"] = F('=MAP(B4:B<N>,D4:D<N>,LAMBDA(n,st,IF(OR(n="",n="VACANT"),"",IF(st="Departed","Departed",'
+ws[f"{CL(PC_GRADE)}4"] = F('=MAP(C4:C<N>,LAMBDA(r,IF(r="","",IFERROR(VLOOKUP(r,<RANKTBL>,2,FALSE),"?"))))', N=r2)
+ws[f"{L_ORD}4"] = F('=MAP(C4:C<N>,LAMBDA(r,IF(r="","",IFERROR(VLOOKUP(r,<RANKTBL>,3,FALSE),""))))', N=r2)
+ws[f"{L_STAT}4"] = F('=MAP(B4:B<N>,D4:D<N>,LAMBDA(n,st,IF(OR(n="",n="VACANT"),"",IF(st="Departed","Departed",'
              'LET(d,<ASOF>,IF(COUNTIFS(<SL_F>,n,<SL_A>,"<="&d,<SL_P>,">="&d,<SL_G>,"<>Cancelled")>0,'
              '"ON DUTY · "&IFERROR(INDEX(FILTER(<SL_D>,<SL_F>=n,<SL_A><=d,<SL_P>>=d,<SL_G><>"Cancelled"),1),""),'
              'IFERROR(INDEX(ARRAYFORMULA(FILTER(<AV_I>&" · "&<AV_B>&" until "&IF(<AV_D>="","open",TEXT(<AV_D>,"dd mmm")),'
              '<AV_A>=n,<AV_C><=d,<AV_M>>=d,<AV_J>="Y")),1),"✓ Available")))))))', N=r2)
 for idx, (key, tab, mn, mx, _) in enumerate(S.ROSTERS):
-    col = CL(18 + idx)
-    ws[f"{col}4"] = F('=MAP(B4:B<N>,D4:D<N>,E4:E<N>,P4:P<N>,LAMBDA(n,st,ex,o,IF(AND(n<>"",n<>"VACANT",'
+    col = CL(PC_ELIG + idx)
+    ws[f"{col}4"] = F('=MAP(B4:B<N>,D4:D<N>,E4:E<N>,<O>4:<O><N>,LAMBDA(n,st,ex,o,IF(AND(n<>"",n<>"VACANT",'
                       'st<>"Departed",ex<>"Y",ISNUMBER(o)),IF(AND(o>=<MIN>,o<=<MAX>),"✓",""),"")))',
-                      N=r2, MIN=f"{ST}$L${4 + idx}", MAX=f"{ST}$M${4 + idx}")
-ws["W4"] = F('=MAP(B4:B<N>,LAMBDA(n,IF(OR(n="",n="VACANT"),"",COUNTIFS(<SL_F>,n,<SL_G>,"<>Cancelled"))))', N=r2)
-ws["X4"] = F('=MAP(B4:B<N>,LAMBDA(n,IF(OR(n="",n="VACANT"),"",LET(m,MAXIFS(<SL_A>,<SL_F>,n,<SL_A>,"<="&<ASOF>,'
+                      N=r2, O=L_ORD, MIN=f"{ST}$L${4 + idx}", MAX=f"{ST}$M${4 + idx}")
+ws[f"{L_DET}4"] = F('=MAP(B4:B<N>,LAMBDA(n,IF(OR(n="",n="VACANT"),"",COUNTIFS(<SL_F>,n,<SL_G>,"<>Cancelled"))))', N=r2)
+ws[f"{L_LAST}4"] = F('=MAP(B4:B<N>,LAMBDA(n,IF(OR(n="",n="VACANT"),"",LET(m,MAXIFS(<SL_A>,<SL_F>,n,<SL_A>,"<="&<ASOF>,'
              '<SL_G>,"<>Cancelled"),IF(m=0,"—",m)))))', N=r2)
-ws["Y4"] = F('=MAP(B4:B<N>,LAMBDA(n,IF(OR(n="",n="VACANT"),"",LET(m,MINIFS(<SL_A>,<SL_F>,n,<SL_A>,">"&<ASOF>,'
+ws[f"{L_NEXT}4"] = F('=MAP(B4:B<N>,LAMBDA(n,IF(OR(n="",n="VACANT"),"",LET(m,MINIFS(<SL_A>,<SL_F>,n,<SL_A>,">"&<ASOF>,'
              '<SL_G>,"<>Cancelled"),IF(m=0,"—",m)))))', N=r2)
-tint(ws, [CL(c) for c in range(15, 26)], 4, 120)
-date_fmt(ws, ["X", "Y"], 4, 120)
+tint(ws, [CL(c) for c in range(PC_GRADE, PC_NEXT + 1)], 4, 120)
+date_fmt(ws, [L_LAST, L_NEXT], 4, 120)
 dv_list(ws, f"{ST}$E$4:$E$40", f"C4:C{r2}")
 dv_list(ws, '"Assigned,Attached,Inbound,Departing,Departed,Vacant"', f"D4:D{r2}")
 dv_list(ws, '"Y"', f"E4:E{r2}")
-ws.conditional_formatting.add(f"R4:V{r2}", CellIsRule(operator="equal", formula=['"✓"'], fill=fill(GOOD_BG),
+ws.conditional_formatting.add(f"{L_E1}4:{L_E2}{r2}", CellIsRule(operator="equal", formula=['"✓"'], fill=fill(GOOD_BG),
                                                       font=Font(name=FONT, color="006300", bold=True)))
-ws.conditional_formatting.add(f"Q4:Q{r2}", FormulaRule(formula=['LEFT($Q4,1)="A"'], fill=fill(WARN_BG)))
-ws.conditional_formatting.add(f"Q4:Q{r2}", FormulaRule(formula=['LEFT($Q4,2)="ON"'], fill=fill(GOOD_BG)))
-ws.conditional_formatting.add(f"A4:N{r2}", FormulaRule(formula=['$B4="VACANT"'], fill=fill(GREY_BG),
+ws.conditional_formatting.add(f"{L_STAT}4:{L_STAT}{r2}", FormulaRule(formula=[f'LEFT(${L_STAT}4,1)="A"'], fill=fill(WARN_BG)))
+ws.conditional_formatting.add(f"{L_STAT}4:{L_STAT}{r2}", FormulaRule(formula=[f'LEFT(${L_STAT}4,2)="ON"'], fill=fill(GOOD_BG)))
+ws.conditional_formatting.add(f"A4:{CL(PC_GRADE - 1)}{r2}", FormulaRule(formula=['$B4="VACANT"'], fill=fill(GREY_BG),
                                                        font=Font(name=FONT, italic=True, color=INK2)))
 ws.freeze_panes = "C4"
-ws.auto_filter.ref = f"A3:Y{3 + len(S.PERSONNEL)}"
+ws.auto_filter.ref = f"A3:{L_NEXT}{3 + len(S.PERSONNEL)}"
 
 # ============================================================================
 # AVAILABILITY
@@ -339,7 +352,7 @@ ws = WS["Availability"]
 A_HEAD = ["Soldier", "Type", "Start", "End (blank = open)", "Remarks", "Source", "Section", "Rank",
           "DA6 code", "Blocks duty", "Days", "Status", "End (calc)"]
 banner(ws, "AVAILABILITY · leave, pass, TDY, school, exemptions",
-       "One row per period. Codes follow AR 220-45: A pauses the DA 6 number, D and U keep counting. "
+       "One row per period. Codes follow DA PAM 220-45: A pauses the DA 6 number, D and U keep counting. "
        "'Request (non-binding)' only raises a flag on Duty Slots and never blocks a Soldier.", 13)
 header_row(ws, 3, A_HEAD, set(A_HEAD[6:]), [30, 22, 11, 12, 46, 20, 10, 7, 8, 8, 7, 10, 11])
 for i, (n, t, s, e, rm) in enumerate(S.AVAILABILITY, start=4):
@@ -403,7 +416,7 @@ ws["P4"] = F('=MAP(A4:A<N>,B4:B<N>,LAMBDA(a,b,IF(a="","",IF(b="",a,b))))', N=N)
 ws["L4"] = F(
     '=MAP(A4:A<N>,F4:F<N>,G4:G<N>,J4:J<N>,P4:P<N>,LAMBDA(a,f,g,r,p,IF(a="","",IF(g="Cancelled","— cancelled",'
     'IF(f="","⚠ UNFILLED",LET(onp,ISNUMBER(MATCH(f,<PE_B>,0)),ri,IFERROR(MATCH(r,<ROSTER_ARR>,0),0),'
-    'el,IF(OR(NOT(onp),ri=0),TRUE,INDEX(<PE_RV>,MATCH(f,<PE_B>,0),ri)="✓"),'
+    'el,IF(OR(NOT(onp),ri=0),TRUE,INDEX(<PE_ELIG>,MATCH(f,<PE_B>,0),ri)="✓"),'
     'ov,COUNTIFS(<SL_F>,f,<SL_A>,"<="&p,<SL_P>,">="&a,<SL_G>,"<>Cancelled"),'
     'rs,COUNTIFS(<SL_F>,f,<SL_A>,"<="&(p+<REST>),<SL_P>,">="&(a-<REST>),<SL_G>,"<>Cancelled"),'
     'ab,IFERROR(INDEX(FILTER(<AV_B>,<AV_A>=f,<AV_C><=p,<AV_M>>=a,<AV_J>="Y"),1),""),'
@@ -413,13 +426,13 @@ ws["L4"] = F(
     'IF(rq="","","REQUEST: "&rq)),IF(m="","✓ OK","⚠ "&m)))))))', N=N)
 NU_COLS = []
 for idx in range(len(S.ROSTERS)):
-    nc = CL(3 + idx * 6)
+    nc = CL(3 + idx * NU_W)
     NU_COLS.append(f"'Next Up'!${nc}$6:${nc}$125")
 ws["M4"] = F(
     '=LET(out,SCAN("§",SEQUENCE(<CNT>),LAMBDA(acc,i,LET(used,IFERROR(REGEXEXTRACT(acc,"^([^§]*)§"),""),'
     'd,INDEX(A4:A<N>,i),r,INDEX(J4:J<N>,i),'
     'ok,AND(d<>"",INDEX(F4:F<N>,i)="",INDEX(G4:G<N>,i)<>"Cancelled",ISNUMBER(MATCH(r,<ROSTER_ARR>,0))),'
-    'pk,IF(NOT(ok),"",IF(d<<ASOF>,"(past date)",IFERROR(LET(q,CHOOSE(MATCH(r,<ROSTER_ARR>,0),<Q1>,<Q2>,<Q3>,<Q4>,<Q5>),'
+    'pk,IF(NOT(ok),"",IF(d<<ASOF>,"(past date)",IFERROR(LET(q,CHOOSE(MATCH(r,<ROSTER_ARR>,0),<QS>),'
     'pe,INDEX(P4:P<N>,i),INDEX(FILTER(q,MAP(q,LAMBDA(n,IF(n="",FALSE,AND('
     'COUNTIFS(<AV_A>,n,<AV_C>,"<="&pe,<AV_M>,">="&d,<AV_J>,"Y")=0,'
     'COUNTIFS(<SL_F>,n,<SL_A>,"<="&(pe+<REST>),<SL_P>,">="&(d-<REST>),<SL_G>,"<>Cancelled")=0,'
@@ -428,7 +441,7 @@ ws["M4"] = F(
     '"⚠ none available"))),'
     'nu,IF(OR(pk="",LEFT(pk,1)="⚠",LEFT(pk,1)="("),used,used&"¦"&r&":"&pk&"¦"&pk&"@"&d&"¦"),'
     'nu&"§"&pk))),MAP(out,LAMBDA(x,IFERROR(REGEXEXTRACT(x,"§(.*)$"),""))))',
-    N=N, CNT=N - 3, Q1=NU_COLS[0], Q2=NU_COLS[1], Q3=NU_COLS[2], Q4=NU_COLS[3], Q5=NU_COLS[4])
+    N=N, CNT=N - 3, QS=",".join(NU_COLS))
 date_fmt(ws, ["A", "B", "P"], 4, N, "dd mmm yy")
 tint(ws, list("CHIJKLMP"), 4, 300)
 dv_list(ws, f"{ST}$P$4:$P$30", f"D4:D{N}")
@@ -459,8 +472,8 @@ G1L, G2L, S1L, S2L = CL(GC1), CL(GC2), CL(SC1), CL(SC2)
 for idx, (key, tab, mn, mx, nature) in enumerate(S.ROSTERS):
     ws = WS[tab]
     ws.sheet_view.showGridLines = False
-    col_elig = f"{PE}${CL(18 + idx)}$4:${CL(18 + idx)}${PEN}"
-    bf_col = f"{PE}${CL(10 + idx)}$4:${CL(10 + idx)}${PEN}"
+    col_elig = f"{PE}${CL(PC_ELIG + idx)}$4:${CL(PC_ELIG + idx)}${PEN}"
+    bf_col = f"{PE}${CL(PC_BF + idx)}$4:${CL(PC_BF + idx)}${PEN}"
     last = GC2
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=8)
     ws["A1"] = f"DUTY ROSTER · {key}"
@@ -474,7 +487,7 @@ for idx, (key, tab, mn, mx, nature) in enumerate(S.ROSTERS):
     ws["A2"].font = font(10, True, INK)
     ws["A2"].alignment = Alignment(vertical="center", indent=1)
     ws.merge_cells(start_row=3, start_column=1, end_row=4, end_column=8)
-    ws["A3"] = ("0 = performed duty (green)  ·  number = details missed since last detailed  ·  A = not available, number paused  ·  "
+    ws["A3"] = ("0 = performed duty (green)  ·  number = details made since last detailed  ·  A = not available, number paused (A3 = carried over)  ·  "
                 "D# = other duty, number continues  ·  U# = misconduct, number continues  ·  red columns = weekend / holiday. "
                 "Fully automatic from Duty Slots + Availability. Do not type in this tab.")
     ws["A3"].font = font(9, False, INK2, italic=True)
@@ -507,11 +520,11 @@ for idx, (key, tab, mn, mx, nature) in enumerate(S.ROSTERS):
         for c in list(range(1, 9)) + list(range(GC1, GC1 + 40)):
             if c != 2:
                 ws.cell(row=r, column=c).alignment = Alignment(horizontal="center")
-    # names: alphabetical within grade, highest grade first (AR 220-45 para 2c)
-    ws["B8"] = F('=IFERROR(CHOOSECOLS(SORT(FILTER(HSTACK(<PE_B>,<PE_P>),<ELIG>="✓"),2,FALSE,1,TRUE),1),"")', ELIG=col_elig)
+    # names: alphabetical within grade, highest grade first (DA PAM 220-45 para 5c)
+    ws["B8"] = F('=IFERROR(CHOOSECOLS(SORT(FILTER(HSTACK(<PE_B>,<PE_ORD>),<ELIG>="✓"),2,FALSE,1,TRUE),1),"")', ELIG=col_elig)
     ws["A8"] = F('=MAP(B8:B127,LAMBDA(n,IF(n="","",IFERROR(VLOOKUP(n,<PE_BC>,2,FALSE),""))))')
     ws["C8"] = F('=MAP(B8:B127,LAMBDA(n,IF(n="","",IFERROR(INDEX(<PE_A>,MATCH(n,<PE_B>,0)),""))))')
-    ws["D8"] = F('=MAP(B8:B127,LAMBDA(n,IF(n="","",IFERROR(INDEX(<PE_P>,MATCH(n,<PE_B>,0)),""))))')
+    ws["D8"] = F('=MAP(B8:B127,LAMBDA(n,IF(n="","",IFERROR(INDEX(<PE_ORD>,MATCH(n,<PE_B>,0)),""))))')
     ws["E8"] = F('=MAP(B8:B127,LAMBDA(n,IF(n="","",IFERROR(INDEX(<BF>,MATCH(n,<PE_B>,0))*1,0))))', BF=bf_col)
     ws["G8"] = F('=MAP(B8:B127,LAMBDA(n,IF(n="","",LET(d,<ASOF>,IF(COUNTIFS(<SL_F>,n,<SL_A>,"<="&d,<SL_P>,">="&d,'
                  '<SL_G>,"<>Cancelled")>0,"ON DUTY",IFERROR(INDEX(ARRAYFORMULA(FILTER(<AV_I>&" · "&<AV_B>,<AV_A>=n,<AV_C><=d,<AV_M>>=d,'
@@ -531,7 +544,7 @@ for idx, (key, tab, mn, mx, nature) in enumerate(S.ROSTERS):
         '=LET(nr,COUNTIF($B$8:$B$127,"?*"),nc,COUNT($<G1>$4:$<G2>$4),IF(OR(nr=0,nc=0),"",MAKEARRAY(nr,nc,LAMBDA(i,j,'
         'LET(idx,SEQUENCE(1,<W>),s,INDEX($<S1>$8:$<S2>$127,i,0),sj,INDEX(s,1,j),'
         'L,IFERROR(MAX(FILTER(idx,idx<=j,s="X")),0),c,' + cnt_core + ','
-        'IF(sj="X",0,IF(sj="A","A",IF(sj="-",c,sj&c))))))))',
+        'IF(sj="X",0,IF(sj="A",IF(AND(j=1,c>0),"A"&c,"A"),IF(sj="-",c,sj&c))))))))',
         G1=G1L, G2=G2L, S1=S1L, S2=S2L, W=GCN)
     ws["H8"] = F(
         '=LET(nr,COUNTIF($B$8:$B$127,"?*"),IF(nr=0,"",MAKEARRAY(nr,1,LAMBDA(i,z,'
@@ -554,7 +567,7 @@ for idx, (key, tab, mn, mx, nature) in enumerate(S.ROSTERS):
     hol = 'INDIRECT("Settings!Y4:Y60")'
     ws.conditional_formatting.add(grid, FormulaRule(formula=[f'AND(ISNUMBER({G1L}{GR1}),{G1L}{GR1}=0)'],
                                                     fill=fill("BFE6BF"), font=Font(name=FONT, bold=True, color="006300")))
-    ws.conditional_formatting.add(grid, FormulaRule(formula=[f'{G1L}{GR1}="A"'], fill=fill(GREY_BG),
+    ws.conditional_formatting.add(grid, FormulaRule(formula=[f'LEFT({G1L}{GR1},1)="A"'], fill=fill(GREY_BG),
                                                     font=Font(name=FONT, color="6B6B6B")))
     ws.conditional_formatting.add(grid, FormulaRule(formula=[f'LEFT({G1L}{GR1},1)="D"'], fill=fill(WARN_BG)))
     ws.conditional_formatting.add(grid, FormulaRule(formula=[f'LEFT({G1L}{GR1},1)="U"'], fill=fill(CRIT_BG)))
@@ -577,12 +590,12 @@ ws = WS["Next Up"]
 ws.sheet_view.showGridLines = False
 banner(ws, "NEXT UP · who is next on every DA 6",
        "Sorted by DA 6 position (highest number first, tie-break per Settings). 'Today' shows availability. "
-       "The first line of each block shows the next open G2 slot and the Soldier the tracker suggests for it.", 29)
+       "The first line of each block shows the next open G2 slot and the Soldier the tracker suggests for it.", NU_W * NR - 1)
 for idx, (key, tab, mn, mx, nature) in enumerate(S.ROSTERS):
-    c0 = 1 + idx * 6
+    c0 = 1 + idx * NU_W
     ws.merge_cells(start_row=3, start_column=c0, end_row=3, end_column=c0 + 4)
     c = ws.cell(row=3, column=c0, value=f"{key} · {nature}")
-    c.font = font(11, True, "FFFFFF" if idx < 2 else INK)
+    c.font = font(11, True, "FFFFFF" if idx in (0, 1, 5) else INK)
     c.fill = fill(SERIES[idx])
     c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     ws.row_dimensions[3].height = 34
@@ -712,8 +725,8 @@ for j, k in enumerate(ROSTER_KEYS, start=2):
     ws.cell(row=4, column=j, value=k)
 for i, sec in enumerate(S.SECTIONS, start=5):
     ws.cell(row=i, column=1, value=sec)
-ws["B5"] = F('=MAKEARRAY(<R>,5,LAMBDA(i,j,COUNTIFS(<SL_I>,INDEX($A$5:$A$<RE>,i),<SL_J>,INDEX($B$4:$F$4,1,j),<SL_F>,"<>",'
-             '<SL_G>,"<>Cancelled",<SL_A>,">="&<START>)))', R=len(S.SECTIONS), RE=4 + len(S.SECTIONS))
+ws["B5"] = F('=MAKEARRAY(<R>,<NR>,LAMBDA(i,j,COUNTIFS(<SL_I>,INDEX($A$5:$A$<RE>,i),<SL_J>,INDEX($B$4:$<LR>$4,1,j),<SL_F>,"<>",'
+             '<SL_G>,"<>Cancelled",<SL_A>,">="&<START>)))', R=len(S.SECTIONS), RE=4 + len(S.SECTIONS), NR=NR, LR=CL(1 + NR))
 # T2 this month by roster (H3:M9)
 table_title(3, 8, "This month by roster")
 for j, h in enumerate(["Roster", "Slots", "Filled", "Open", "Conflicts", "Next open"], start=8):
@@ -745,7 +758,7 @@ for i, (t, *_rest) in enumerate(S.ABSENCE_TYPES, start=5):
 table_title(3, 21, "Details per Soldier (top 15)")
 ws.cell(row=4, column=21, value="Soldier")
 ws.cell(row=4, column=22, value="Details")
-ws["U5"] = F('=IFERROR(SORTN(FILTER(HSTACK(<PE_C>&" "&<PE_B>,<PE_W>),ISNUMBER(<PE_W>),<PE_W>>0),15,0,2,FALSE),"")')
+ws["U5"] = F('=IFERROR(SORTN(FILTER(HSTACK(<PE_C>&" "&<PE_B>,<PE_DET>),ISNUMBER(<PE_DET>),<PE_DET>>0),15,0,2,FALSE),"")')
 # T6 equipment status (X3:Y9)
 table_title(3, 24, "Equipment by status")
 ws.cell(row=4, column=24, value="Status")
@@ -778,7 +791,7 @@ kpis = [
     ("Equipment NMC / Missing", "=Y6+Y7"),
     ("Inventories due / overdue", '=COUNTIF(Equipment!$K$4:$K$1000,"DUE*")+COUNTIF(Equipment!$K$4:$K$1000,"OVERDUE")+COUNTIF(Equipment!$K$4:$K$1000,"NO INVENTORY DATE")'),
     ("Appointments next 7 days", F('=COUNTIFS(Appointments!$A$4:$A$1000,">="&<ASOF>,Appointments!$A$4:$A$1000,"<="&(<ASOF>+7),Appointments!$F$4:$F$1000,"Scheduled")')),
-    ("Duty-eligible enlisted", F('=ARRAYFORMULA(SUMPRODUCT(--(MMULT(--(<PE_RV>="✓"),{1;1;1;1;1})>0)))')),
+    ("Duty-eligible enlisted", F('=ARRAYFORMULA(SUMPRODUCT(--(MMULT(--(<PE_ELIG>="✓"),SEQUENCE(<NR>,1,1,0))>0)))', NR=NR)),
     ("Fullest DA 6 (columns used of 71)", "=MAX(" + ",".join(f"COUNT('{r[1]}'!{G1L}4:{G2L}4)" for r in S.ROSTERS) + ")"),
 ]
 for i, (k, v) in enumerate(kpis, start=5):
@@ -793,12 +806,12 @@ ws.cell(row=4, column=34, value="Parent")
 mm = [("=\"G2 PSG · \"&TEXT(" + T["ASOF"] + ",\"dd mmm yy\")", "")]
 mm.append(("Duty Rosters (DA 6)", "=$AG$5"))
 for idx, (key, tab, *_r) in enumerate(S.ROSTERS):
-    nc = CL(1 + idx * 6)
-    mm.append((f"=\"{key} → \"&IFERROR(INDEX('Next Up'!${CL(2 + idx * 6)}$6:${CL(2 + idx * 6)}$125,1)&\" \"&INDEX('Next Up'!${CL(3 + idx * 6)}$6:${CL(3 + idx * 6)}$125,1),\"none\")",
+    rk_c, nm_c = CL(2 + idx * NU_W), CL(3 + idx * NU_W)
+    mm.append((f"=\"{key} → \"&IFERROR(INDEX('Next Up'!${rk_c}$6:${rk_c}$125,1)&\" \"&INDEX('Next Up'!${nm_c}$6:${nm_c}$125,1),\"none\")",
                "=$AG$6"))
 mm.append(('="Personnel · "&AE5&" assigned"', "=$AG$5"))
 for i, sec in enumerate(S.SECTIONS):
-    mm.append((f'="{sec} ("&COUNTIFS({T["PE_A"]},"{sec}",{T["PE_D"]},"<>Departed")&")"', "=$AG$12"))
+    mm.append((f'="{sec} ("&COUNTIFS({T["PE_A"]},"{sec}",{T["PE_D"]},"<>Departed")&")"', f"=$AG${7 + NR}"))
 mm.append(('="Unavailable today · "&AE7', "=$AG$5"))
 mm.append(('="G2 slots " & TEXT(B2,"mmm") & " · "&AE11&"/"&AE10&" filled"', "=$AG$5"))
 mm.append(('="Taskings · "&AE15&" open"', "=$AG$5"))
@@ -917,9 +930,9 @@ ws["I9"].fill = fill(NAVY)
 ws["I9"].alignment = Alignment(indent=1, vertical="center")
 for idx, (key, tab, *_r) in enumerate(S.ROSTERS):
     r = 10 + idx
-    b = idx * 6
+    b = idx * NU_W
     rk, nm, cu, td = (f"'Next Up'!${CL(b + k)}$6:${CL(b + k)}$125" for k in (2, 3, 4, 5))
-    ws.cell(row=r, column=9, value=key).font = font(10, True, "FFFFFF" if idx < 2 else INK)
+    ws.cell(row=r, column=9, value=key).font = font(10, True, "FFFFFF" if idx in (0, 1, 5) else INK)
     ws.cell(row=r, column=9).fill = fill(SERIES[idx])
     ws.cell(row=r, column=9).alignment = Alignment(horizontal="center", vertical="center")
     ws.cell(row=r, column=10, value=(
@@ -936,7 +949,7 @@ for idx, (key, tab, *_r) in enumerate(S.ROSTERS):
     ws.cell(row=r, column=11).alignment = Alignment(vertical="center", indent=1, shrink_to_fit=True)
     ws.row_dimensions[r].height = 22
 
-# THIS MONTH BY ROSTER (B16:G22)
+# THIS MONTH BY ROSTER (B16:G17+NR)
 ws.merge_cells("B16:G16")
 ws["B16"] = F('="THIS MONTH BY DA 6 ROSTER · "&UPPER(TEXT(<DD>B2,"mmmm yyyy"))', DD=DD)
 ws["B16"].font = font(10, True, "FFFFFF")
@@ -948,7 +961,7 @@ for j, h in enumerate(["Roster", "G2 slots", "Filled", "Open", "Conflicts", "Nex
     c.alignment = Alignment(horizontal="center")
     c.fill = fill("FFFFFF")
     c.border = Border(bottom=thin)
-for i in range(5):
+for i in range(NR):
     r = 18 + i
     for j, src in enumerate(["H", "I", "J", "K", "L", "M"], start=2):
         c = ws.cell(row=r, column=j, value=f"={DD}{src}{5 + i}")
@@ -956,8 +969,8 @@ for i in range(5):
         c.alignment = Alignment(horizontal="center")
         c.fill = fill("FFFFFF")
         c.border = Border(bottom=Side(style="hair", color=LINE))
-ws.conditional_formatting.add("E18:E22", CellIsRule(operator="greaterThan", formula=["0"], font=Font(name=FONT, bold=True, color=CRIT)))
-ws.conditional_formatting.add("F18:F22", CellIsRule(operator="greaterThan", formula=["0"], font=Font(name=FONT, bold=True, color="C77700")))
+ws.conditional_formatting.add(f"E18:E{17 + NR}", CellIsRule(operator="greaterThan", formula=["0"], font=Font(name=FONT, bold=True, color=CRIT)))
+ws.conditional_formatting.add(f"F18:F{17 + NR}", CellIsRule(operator="greaterThan", formula=["0"], font=Font(name=FONT, bold=True, color="C77700")))
 
 # UNAVAILABLE TODAY (B24:G35)
 ws.merge_cells("B24:G24")
@@ -1047,7 +1060,7 @@ c1 = BarChart()
 c1.type = "col"
 c1.grouping = "stacked"
 c1.overlap = 100
-c1.add_data(Reference(dd, min_col=2, max_col=6, min_row=4, max_row=4 + len(S.SECTIONS)), titles_from_data=True)
+c1.add_data(Reference(dd, min_col=2, max_col=1 + NR, min_row=4, max_row=4 + len(S.SECTIONS)), titles_from_data=True)
 c1.set_categories(Reference(dd, min_col=1, min_row=5, max_row=4 + len(S.SECTIONS)))
 for i, s in enumerate(c1.series):
     s.graphicalProperties.solidFill = SERIES[i]
@@ -1059,8 +1072,8 @@ c2 = BarChart()
 c2.type = "col"
 c2.grouping = "stacked"
 c2.overlap = 100
-c2.add_data(Reference(dd, min_col=10, max_col=11, min_row=4, max_row=9), titles_from_data=True)
-c2.set_categories(Reference(dd, min_col=8, min_row=5, max_row=9))
+c2.add_data(Reference(dd, min_col=10, max_col=11, min_row=4, max_row=4 + NR), titles_from_data=True)
+c2.set_categories(Reference(dd, min_col=8, min_row=5, max_row=4 + NR))
 c2.series[0].graphicalProperties.solidFill = SERIES[0]
 c2.series[1].graphicalProperties.solidFill = "C9CED6"
 style_chart(c2, "This month: filled vs open G2 slots", "Slots")
@@ -1139,10 +1152,12 @@ howto = [
     ("2. New BDE roster: paste it into a new tab ▸ G2 PSG ▸ Import G2 slots (or type the G2-labeled slots on Duty Slots).", ""),
     ("3. Open slots: use 'Suggested (next up)' or G2 PSG ▸ Auto-fill open G2 slots. Leave/pass/TDY/appointments go on Availability.", ""),
     ("4. G2 PSG ▸ Publish shared view gives section sergeants a no-PII copy; the request form feeds the Requests tab (tick Approve).", ""),
-    ("DA 6 rules applied (AR 220-45)", "h2"),
+    ("DA 6 rules applied (AR 220-45 / DA PAM 220-45, 2024)", "h2"),
     ("Number = details made from the roster since last detailed · 0 = did the duty · A = authorized absence, number paused · D = other duty, "
      "number continues · U = misconduct, number continues · highest number is next; if unavailable, next highest · names alphabetical "
-     "within grade, highest grade first · weekend/holiday postings in red · CQ Runner + SD Runner share ONE RUNNER DA 6.", ""),
+     "within grade, highest grade first · weekend/holiday postings in red · a separate DA 6 for each duty (AR 220-45 para 4b): CQ Runner and SD Runner each have their own, and a Soldier tasked on one is coded D on the other, so no one is double tasked.", ""),
+    ("Extra duty under UCMJ Art. 15 is punishment, not a DA 6 detail: log it on Availability as 'Extra duty / restriction' (U). Never use an honor duty such as the flag detail as extra duty (AR 27-10 para 3-19b(4)(b)).", ""),
+    ("AR 220-45 app B-4a: whoever maintains the DA 6 needs a training certificate or MFR on AR 220-45 and DA PAM 220-45.", ""),
     ("Colors", "h2"),
     ("Navy headers = you type. Grey headers / tinted columns = automatic: never type over them. Green = OK · amber = attention · red = action.", ""),
     ("Verify from the build", "h2"),
@@ -1181,7 +1196,7 @@ for (title, r1), (w, cols) in by_sheet.items():
 out = sys.argv[1] if len(sys.argv) > 1 else "G2_PSG_Tracker.xlsx"
 if os.environ.get("VERIFY"):
     # trimmed copy used only to verify the DA 6 engine in Google Sheets
-    keep = {"Settings", "Personnel", "Availability", "Duty Slots", "DA6 RUNNER"}
+    keep = {"Settings", "Personnel", "Availability", "Duty Slots", "DA6 CQ RUNNER"}
     for name in list(wb.sheetnames):
         if name not in keep:
             del wb[name]

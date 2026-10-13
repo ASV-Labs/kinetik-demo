@@ -14,12 +14,14 @@ var TABS = {
   APPTS: 'Appointments', EQUIP: 'Equipment', TASK: 'Taskings', SET: 'Settings', DATA: 'Dash Data',
   REQ: 'Requests'
 };
+// one DA 6 per duty (AR 220-45 para 4b); bfCol = that roster's "BF #" column on Personnel (J..O)
 var ROSTERS = [
   { key: 'CQ NCO', tab: 'DA6 CQ NCO', bfCol: 10 },
-  { key: 'RUNNER', tab: 'DA6 RUNNER', bfCol: 11 },
-  { key: 'SDNCO', tab: 'DA6 SDNCO', bfCol: 12 },
-  { key: 'FLAG', tab: 'DA6 FLAG', bfCol: 13 },
-  { key: 'ROAD GUARD', tab: 'DA6 ROAD GUARD', bfCol: 14 }
+  { key: 'CQ RUNNER', tab: 'DA6 CQ RUNNER', bfCol: 11 },
+  { key: 'SD RUNNER', tab: 'DA6 SD RUNNER', bfCol: 12 },
+  { key: 'SDNCO', tab: 'DA6 SDNCO', bfCol: 13 },
+  { key: 'FLAG', tab: 'DA6 FLAG', bfCol: 14 },
+  { key: 'ROAD GUARD', tab: 'DA6 ROAD GUARD', bfCol: 15 }
 ];
 // Duty Slots columns (1-based); data starts on row 4
 var S = { DATE: 1, END: 2, DUTY: 4, POS: 5, SOLDIER: 6, STATUS: 7, RANK: 8, SECTION: 9, ROSTER: 10,
@@ -92,7 +94,7 @@ function setup() {
 
 function applyCosmetics_(ss) {
   var fmt = 'dd mmm yy';
-  var dateCols = [[TABS.SLOTS, ['A', 'B', 'P']], [TABS.AVAIL, ['C', 'D', 'M']], [TABS.PERS, ['X', 'Y']],
+  var dateCols = [[TABS.SLOTS, ['A', 'B', 'P']], [TABS.AVAIL, ['C', 'D', 'M']], [TABS.PERS, ['Z', 'AA']],
                   [TABS.APPTS, ['A']], [TABS.EQUIP, ['G', 'J']], [TABS.TASK, ['B', 'C']]];
   dateCols.forEach(function (d) {
     var sh = ss.getSheetByName(d[0]);
@@ -111,16 +113,16 @@ function applyCosmetics_(ss) {
     sh.setRowHeights(3, 2, 18);
   });
   var nu = ss.getSheetByName(TABS.NEXT);
-  if (nu) nu.getRange('A6:AC125').setFontSize(9).setHorizontalAlignment('center');
+  if (nu) nu.getRange('A6:AJ125').setFontSize(9).setHorizontalAlignment('center');
 }
 
 function protectComputed_(ss) {
   var spec = [
-    [TABS.SLOTS, ['C4:C', 'H4:M', 'P4:P']], [TABS.AVAIL, ['G4:M']], [TABS.PERS, ['O4:Y']],
+    [TABS.SLOTS, ['C4:C', 'H4:M', 'P4:P']], [TABS.AVAIL, ['G4:M']], [TABS.PERS, ['P4:AA']],
     [TABS.APPTS, ['H4:K']], [TABS.EQUIP, ['I4:K']], [TABS.TASK, ['L4:M']], [TABS.DATA, ['A1:AH60']]
   ];
   ROSTERS.forEach(function (r) { spec.push([r.tab, ['A1:EU127']]); });
-  spec.push([TABS.NEXT, ['A1:AC125']]);
+  spec.push([TABS.NEXT, ['A1:AJ125']]);
   spec.push([TABS.DASH, ['A1:N140']]);
   spec.forEach(function (s) {
     var sh = ss.getSheetByName(s[0]);
@@ -752,9 +754,9 @@ function rebuildCharts() {
   dash.getCharts().forEach(function (c) { if (c.getOptions().get('title') !== keep) dash.removeChart(c); });
   var palette = ['#2A78D6', '#EB6834', '#1BAF7A', '#EDA100', '#E87BA4', '#008300', '#6250D6', '#E34948'];
   var specs = [
-    { type: Charts.ChartType.COLUMN, range: 'A4:F12', title: 'G2 duty details by section', row: 39, col: 2, stacked: true,
+    { type: Charts.ChartType.COLUMN, range: 'A4:G12', title: 'G2 duty details by section', row: 39, col: 2, stacked: true,
       colors: palette.slice(0, 5) },
-    { type: Charts.ChartType.COLUMN, range: ['H4:H9', 'J4:K9'], title: 'This month: filled vs open G2 slots', row: 45,
+    { type: Charts.ChartType.COLUMN, range: ['H4:H10', 'J4:K10'], title: 'This month: filled vs open G2 slots', row: 45,
       col: 9, stacked: true, colors: ['#2A78D6', '#C9CED6'] },
     { type: Charts.ChartType.LINE, range: 'O4:P34', title: 'Soldiers unavailable, next 30 days', row: 57, col: 2,
       colors: ['#2A78D6'], legend: 'none' },
@@ -872,7 +874,7 @@ function buildOneSlider(silent) {
   // linked (live) chart: rebuilt on Dash Data so the slide never depends on Dashboard chart titles
   dd.getCharts().forEach(function (c) { if (c.getOptions().get('title') === SLIDE_CHART_TITLE) dd.removeChart(c); });
   var chart = dd.newChart().setChartType(Charts.ChartType.COLUMN)
-    .addRange(dd.getRange('H4:H9')).addRange(dd.getRange('J4:K9')).setNumHeaders(1)
+    .addRange(dd.getRange('H4:H10')).addRange(dd.getRange('J4:K10')).setNumHeaders(1)
     .setPosition(62, 1, 0, 0).setOption('title', SLIDE_CHART_TITLE).setOption('isStacked', true)
     .setOption('colors', ['#2A78D6', '#C9CED6']).setOption('legend', { position: 'bottom' })
     .setOption('backgroundColor', '#FFFFFF').setOption('width', 520).setOption('height', 300).build();
