@@ -55,7 +55,7 @@ TZ=UTC node tests/parser.check.cjs             # BDE-roster importer check (fict
 - Excluding a Soldier from a roster needs a reason on Personnel (para 10c).
 - Brought-forward numbers come from the Personnel `BF #` columns. **Close & restart DA 6s** archives the rosters and carries the current numbers forward.
 
-The regulation doesn't cover ties or rest between duties, so both are settings: **Tie-break** (roster order or junior first) and **Rest window**.
+The regulation doesn't cover ties or rest between duties, so both are settings: **Tie-break** (fewest G2 details first, the default; or roster order; or junior first) and **Rest window**.
 
 Two documented choices: new Soldiers are sorted into grade order rather than added at the foot of the roster (para 5c says they *can* be added at the foot), and a performed duty is shown as `0` rather than a diagonal line (para 10b).
 

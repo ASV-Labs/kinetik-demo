@@ -195,7 +195,7 @@ header_row(ws, 3, ["Setting", "Value", "Notes"])
 settings_rows = [
     ("Roster FROM date", date(2026, 10, 1), "First posting date counted on every DA 6 (DA PAM 220-45 para 5a). Tracker history starts 1 Oct 26."),
     ("Rest window (days)", 1, "A Soldier with any other G2 duty within +/- this many days is coded D and is not suggested."),
-    ("Tie-break (equal numbers)", "Roster order", "DA PAM 220-45 is silent on ties. 'Roster order' = senior/alphabetical as listed; 'Junior first' = lowest grade first."),
+    ("Tie-break (equal numbers)", "Fewest details", "DA PAM 220-45 is silent on ties. 'Fewest details' = fewest G2 details on Duty Slots, then roster order (spreads load when many Soldiers share a number); 'Roster order' = senior/alphabetical as listed; 'Junior first' = lowest grade first."),
     ("Unit label on BDE roster", "G2", "Slots labeled with this section/unit are G2's to fill (used by the importer)."),
     ("As-of date override", None, "Leave blank to use TODAY(). Set a date to brief 'as of' a specific day."),
     ("As-of date (in use)", "=IF(B8=\"\",TODAY(),B8)", "Computed: drives every status, KPI and chart."),
@@ -219,7 +219,7 @@ ws["B4"].number_format = "dd mmm yyyy"
 ws["B8"].number_format = "dd mmm yyyy"
 ws["B9"].number_format = "dd mmm yyyy"
 ws["B9"].fill = fill(AUTO)
-dv_list(ws, '"Roster order,Junior first"', "B6")
+dv_list(ws, '"Fewest details,Roster order,Junior first"', "B6")
 for col, w in zip("ABC", (30, 22, 60)):
     ws.column_dimensions[col].width = w
 
@@ -393,11 +393,11 @@ D_HEAD = ["Date", "End date (multi-day)", "Day", "Duty", "Position / detail", "S
 D_AUTO = {"Day", "Rank", "Section", "DA 6 roster", "Wknd / Hol", "Check", "Suggested (next up)", "End (calc)"}
 banner(ws, "DUTY SLOTS · every G2-labeled slot from the BDE roster",
        "Enter only slots labeled G2. Date + Duty create the requirement; picking a Soldier posts it to the right DA 6 "
-       "automatically (CQ Runner and SD Runner share one DA 6). 'Suggested' shows the next eligible, available Soldier "
+       "automatically (one DA 6 per duty). 'Suggested' shows the next eligible, available Soldier "
        "in DA 6 order; 'Check' flags double-tasking, back-to-back duty, rank band and availability.", 16)
 header_row(ws, 3, D_HEAD, D_AUTO, [12, 12, 6, 17, 24, 28, 12, 7, 10, 12, 10, 44, 28, 40, 18, 11])
 asof_seed = date(2026, 10, 13)
-for i, (s, e, duty, pos, who, rm) in enumerate(S.SLOTS, start=4):
+for i, (s, e, duty, pos, who, rm, *src) in enumerate(S.SLOTS, start=4):
     ws.cell(row=i, column=1, value=s)
     ws.cell(row=i, column=2, value=e)
     ws.cell(row=i, column=4, value=duty)
@@ -405,7 +405,7 @@ for i, (s, e, duty, pos, who, rm) in enumerate(S.SLOTS, start=4):
     ws.cell(row=i, column=6, value=who)
     ws.cell(row=i, column=7, value="Completed" if (e or s) < asof_seed else "Scheduled")
     ws.cell(row=i, column=14, value=rm or None)
-    ws.cell(row=i, column=15, value=S.SRC_OCT)
+    ws.cell(row=i, column=15, value=src[0] if src else S.SRC_OCT)
 N = SLN
 ws["C4"] = F('=MAP(A4:A<N>,LAMBDA(a,IF(a="","",TEXT(a,"ddd"))))', N=N)
 ws["H4"] = F('=MAP(F4:F<N>,LAMBDA(n,IF(n="","",IFERROR(VLOOKUP(n,<PE_BC>,2,FALSE),"?"))))', N=N)
@@ -552,9 +552,11 @@ for idx, (key, tab, mn, mx, nature) in enumerate(S.ROSTERS):
         'L,IFERROR(MAX(FILTER(idx,idx<=j,s="X")),0),' + cnt_core + ')))))',
         G1=G1L, G2=G2L, S1=S1L, S2=S2L, W=GCN)
     ws["F8"] = F(
-        '=LET(nr,COUNTIF($B$8:$B$127,"?*"),IF(nr=0,"",MAKEARRAY(nr,1,LAMBDA(i,z,'
-        'LET(hc,$H$8:$H$127,dc,$D$8:$D$127,sq,SEQUENCE(120),hv,INDEX(hc,i),ov,INDEX(dc,i),'
-        'COUNTIF(hc,">"&hv)+IF(<TIE>="Junior first",SUMPRODUCT((hc=hv)*((dc<ov)+(dc=ov)*(sq<=i))),SUMPRODUCT((hc=hv)*(sq<=i))))))))')
+        '=LET(nr,COUNTIF($B$8:$B$127,"?*"),lc,MAP($B$8:$B$127,LAMBDA(n,IF(n="",0,IFERROR(INDEX(<PE_DET>,MATCH(n,<PE_B>,0))*1,0)))),'
+        'IF(nr=0,"",MAKEARRAY(nr,1,LAMBDA(i,z,'
+        'LET(hc,$H$8:$H$127,dc,$D$8:$D$127,sq,SEQUENCE(120),hv,INDEX(hc,i),ov,INDEX(dc,i),lv,INDEX(lc,i),'
+        'COUNTIF(hc,">"&hv)+IF(<TIE>="Junior first",SUMPRODUCT((sq<=nr)*(hc=hv)*((dc<ov)+(dc=ov)*(sq<=i))),'
+        'IF(<TIE>="Roster order",SUMPRODUCT((sq<=nr)*(hc=hv)*(sq<=i)),SUMPRODUCT((sq<=nr)*(hc=hv)*((lc<lv)+(lc=lv)*(sq<=i))))))))))')
     # body cosmetics (borders/alignment) are applied by Apps Script Setup to keep the file small
     for c in range(1, 9):
         ws.column_dimensions[CL(c)].width = [7, 28, 10, 5, 6, 8, 18, 9][c - 1]
