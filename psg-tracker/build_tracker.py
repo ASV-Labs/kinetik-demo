@@ -80,7 +80,7 @@ T = {
     "PE_H": f"{PE}$H$4:$H${PEN}", "PE_ORD": f"{PE}${L_ORD}$4:${L_ORD}${PEN}",
     "PE_ELIG": f"{PE}${L_E1}$4:${L_E2}${PEN}", "PE_DET": f"{PE}${L_DET}$4:${L_DET}${PEN}",
     "START": f"{ST}$B$4", "REST": f"{ST}$B$5", "TIE": f"{ST}$B$6", "UNIT": f"{ST}$B$7",
-    "ASOF": f"{ST}$B$9", "LOOK": f"{ST}$B$10", "CYCLE": f"{ST}$B$11", "PSG": f"{ST}$B$12",
+    "ASOF": f"{ST}$B$9", "LOOK": f"{ST}$B$10", "CYCLE": f"{ST}$B$11", "PSG": f"{ST}$B$12", "FLAGPREF": f"{ST}$B$18",
     "HOL": f"{ST}$Y$4:$Y$60", "RANKTBL": f"{ST}$E$4:$H$40", "DUTYTBL": f"{ST}$P$4:$Q$30",
     "ABSTBL": f"{ST}$T$4:$V$40", "ROSTER_ARR": ROSTER_ARR,
     "MS": "'Dash Data'!$B$2", "ME": "'Dash Data'!$D$2",
@@ -207,6 +207,8 @@ settings_rows = [
     ("Close-out (archive) log", None, "Filled automatically when you close/restart the DA 6s."),
     ("One-slider file ID", None, "Filled automatically by the Apps Script 'Build / refresh one-slider brief'."),
     ("Brief marking (optional)", None, "Banner text for the one-slider (top and footer), per your unit SOP. Blank = none."),
+    ("Flag detail: rank first", "SSG", "Local policy. On FLAG slots, an available Soldier of this rank is suggested before anyone else "
+     "in the slot's grade band (for example E5-E6), in DA 6 order. Others go only when none is available. Blank = DA 6 order only."),
 ]
 for i, (k, v, n) in enumerate(settings_rows, start=4):
     ws.cell(row=i, column=1, value=k).font = font(10, True)
@@ -220,6 +222,7 @@ ws["B8"].number_format = "dd mmm yyyy"
 ws["B9"].number_format = "dd mmm yyyy"
 ws["B9"].fill = fill(AUTO)
 dv_list(ws, '"Fewest details,Roster order,Junior first"', "B6")
+dv_list(ws, '"SSG,SGT"', "B18")
 for col, w in zip("ABC", (30, 22, 60)):
     ws.column_dimensions[col].width = w
 
@@ -407,6 +410,11 @@ for i, (s, e, duty, pos, who, rm, *src) in enumerate(S.SLOTS, start=4):
     ws.cell(row=i, column=14, value=rm or None)
     ws.cell(row=i, column=15, value=src[0] if src else S.SRC_OCT)
 N = SLN
+# Grade band written in the position text ("E1-E4", "E5-E6", "NCOIC (E6)", "NCOIC (E6-E7)"): lo..hi enlisted
+# grade, lo=0 when the position names no band. GRADE_OF turns a Personnel name into its enlisted grade number.
+SLOT_BAND = ('lo,IFERROR(VALUE(REGEXEXTRACT(<POS>&"","E(\\d)")),0),'
+             'hi,IFERROR(VALUE(REGEXEXTRACT(<POS>&"","E\\d\\s*-\\s*E?(\\d)")),lo)')
+GRADE_OF = ('IFERROR(VALUE(REGEXEXTRACT(VLOOKUP(VLOOKUP(<WHO>,<PE_BC>,2,FALSE),<RANKTBL>,2,FALSE)&"","^E(\\d)$")),0)')
 ws["C4"] = F('=MAP(A4:A<N>,LAMBDA(a,IF(a="","",TEXT(a,"ddd"))))', N=N)
 ws["H4"] = F('=MAP(F4:F<N>,LAMBDA(n,IF(n="","",IFERROR(VLOOKUP(n,<PE_BC>,2,FALSE),"?"))))', N=N)
 ws["I4"] = F('=MAP(F4:F<N>,LAMBDA(n,IF(n="","",IFERROR(INDEX(<PE_A>,MATCH(n,<PE_B>,0)),"?"))))', N=N)
@@ -414,16 +422,19 @@ ws["J4"] = F('=MAP(D4:D<N>,LAMBDA(t,IF(t="","",IFERROR(VLOOKUP(t,<DUTYTBL>,2,FAL
 ws["K4"] = F('=MAP(A4:A<N>,LAMBDA(a,IF(a="","",IF(COUNTIF(<HOL>,a)>0,"HOLIDAY",IF(WEEKDAY(a,2)>5,"WEEKEND","")))))', N=N)
 ws["P4"] = F('=MAP(A4:A<N>,B4:B<N>,LAMBDA(a,b,IF(a="","",IF(b="",a,b))))', N=N)
 ws["L4"] = F(
-    '=MAP(A4:A<N>,F4:F<N>,G4:G<N>,J4:J<N>,P4:P<N>,LAMBDA(a,f,g,r,p,IF(a="","",IF(g="Cancelled","— cancelled",'
+    '=MAP(A4:A<N>,F4:F<N>,G4:G<N>,J4:J<N>,P4:P<N>,E4:E<N>,LAMBDA(a,f,g,r,p,e,IF(a="","",IF(g="Cancelled","— cancelled",'
     'IF(f="","⚠ UNFILLED",LET(onp,ISNUMBER(MATCH(f,<PE_B>,0)),ri,IFERROR(MATCH(r,<ROSTER_ARR>,0),0),'
     'el,IF(OR(NOT(onp),ri=0),TRUE,INDEX(<PE_ELIG>,MATCH(f,<PE_B>,0),ri)="✓"),'
+    '<BAND>,sg,IF(OR(NOT(onp),lo=0),TRUE,LET(gq,<GRADE_OF_f>,AND(gq>=lo,gq<=hi))),'
     'ov,COUNTIFS(<SL_F>,f,<SL_A>,"<="&p,<SL_P>,">="&a,<SL_G>,"<>Cancelled"),'
     'rs,COUNTIFS(<SL_F>,f,<SL_A>,"<="&(p+<REST>),<SL_P>,">="&(a-<REST>),<SL_G>,"<>Cancelled"),'
     'ab,IFERROR(INDEX(FILTER(<AV_B>,<AV_A>=f,<AV_C><=p,<AV_M>>=a,<AV_J>="Y"),1),""),'
     'rq,IFERROR(INDEX(FILTER(<AV_E>,<AV_A>=f,<AV_C><=p,<AV_M>>=a,<AV_J>="N"),1),""),'
     'm,TEXTJOIN(" · ",TRUE,IF(onp,"","NOT ON PERSONNEL"),IF(el,"","OUTSIDE RANK BAND / EXCLUDED"),'
+    'IF(sg,"","WRONG GRADE FOR SLOT (E"&lo&IF(hi>lo,"-E"&hi,"")&")"),'
     'IF(ov>1,"DOUBLE-TASKED",""),IF(rs>ov,"BACK-TO-BACK",""),IF(ab="","","UNAVAILABLE: "&ab),'
-    'IF(rq="","","REQUEST: "&rq)),IF(m="","✓ OK","⚠ "&m)))))))', N=N)
+    'IF(rq="","","REQUEST: "&rq)),IF(m="","✓ OK","⚠ "&m)))))))', N=N,
+    BAND=SLOT_BAND.replace("<POS>", "e"), GRADE_OF_f=GRADE_OF.replace("<WHO>", "f"))
 NU_COLS = []
 for idx in range(len(S.ROSTERS)):
     nc = CL(3 + idx * NU_W)
@@ -433,15 +444,21 @@ ws["M4"] = F(
     'd,INDEX(A4:A<N>,i),r,INDEX(J4:J<N>,i),'
     'ok,AND(d<>"",INDEX(F4:F<N>,i)="",INDEX(G4:G<N>,i)<>"Cancelled",ISNUMBER(MATCH(r,<ROSTER_ARR>,0))),'
     'pk,IF(NOT(ok),"",IF(d<<ASOF>,"(past date)",IFERROR(LET(q,CHOOSE(MATCH(r,<ROSTER_ARR>,0),<QS>),'
-    'pe,INDEX(P4:P<N>,i),INDEX(FILTER(q,MAP(q,LAMBDA(n,IF(n="",FALSE,AND('
+    'pe,INDEX(P4:P<N>,i),ps,INDEX(E4:E<N>,i),<BAND>,'
+    'cand,FILTER(q,MAP(q,LAMBDA(n,IF(n="",FALSE,AND('
+    'OR(lo=0,LET(gq,<GRADE_OF_n>,AND(gq>=lo,gq<=hi))),'
     'COUNTIFS(<AV_A>,n,<AV_C>,"<="&pe,<AV_M>,">="&d,<AV_J>,"Y")=0,'
     'COUNTIFS(<SL_F>,n,<SL_A>,"<="&(pe+<REST>),<SL_P>,">="&(d-<REST>),<SL_G>,"<>Cancelled")=0,'
     'ISERROR(FIND("¦"&r&":"&n&"¦",used)),'
-    'SUMPRODUCT(--ISNUMBER(FIND("¦"&n&"@"&(d+SEQUENCE(2*<REST>+1,1,-<REST>))&"¦",used)))=0))))),1)),'
+    'SUMPRODUCT(--ISNUMBER(FIND("¦"&n&"@"&(d+SEQUENCE(2*<REST>+1,1,-<REST>))&"¦",used)))=0))))),'
+    'sp,IF(OR(r<>"FLAG",<FLAGPREF>=""),"",IFERROR(INDEX(FILTER(cand,MAP(cand,LAMBDA(n,'
+    'IFERROR(VLOOKUP(n,<PE_BC>,2,FALSE),"")=<FLAGPREF>))),1),"")),'
+    'IF(sp<>"",sp,INDEX(cand,1))),'
     '"⚠ none available"))),'
     'nu,IF(OR(pk="",LEFT(pk,1)="⚠",LEFT(pk,1)="("),used,used&"¦"&r&":"&pk&"¦"&pk&"@"&d&"¦"),'
     'nu&"§"&pk))),MAP(out,LAMBDA(x,IFERROR(REGEXEXTRACT(x,"§(.*)$"),""))))',
-    N=N, CNT=N - 3, QS=",".join(NU_COLS))
+    N=N, CNT=N - 3, QS=",".join(NU_COLS), BAND=SLOT_BAND.replace("<POS>", "ps"),
+    GRADE_OF_n=GRADE_OF.replace("<WHO>", "n"))
 date_fmt(ws, ["A", "B", "P"], 4, N, "dd mmm yy")
 tint(ws, list("CHIJKLMP"), 4, 300)
 dv_list(ws, f"{ST}$P$4:$P$30", f"D4:D{N}")

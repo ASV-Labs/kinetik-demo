@@ -203,7 +203,7 @@ ROSTERS = [
     ("CQ RUNNER", "DA6 CQ RUNNER", 1, 4, "Charge of Quarters Runner (PVT-SPC)"),
     ("SD RUNNER", "DA6 SD RUNNER", 1, 4, "Staff Duty Runner (PVT-SPC)"),
     ("SDNCO", "DA6 SDNCO", 7, 8, "Staff Duty NCO (SSG-SFC)"),
-    ("FLAG", "DA6 FLAG", 1, 8, "Flag Detail (PVT-SFC)"),
+    ("FLAG", "DA6 FLAG", 1, 7, "Flag Detail (PVT-SSG; no SFC)"),
     ("ROAD GUARD", "DA6 ROAD GUARD", 1, 6, "Road Guard Detail (PVT-SGT)"),
 ]
 

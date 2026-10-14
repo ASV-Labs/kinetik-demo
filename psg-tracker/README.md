@@ -55,6 +55,8 @@ TZ=UTC node tests/parser.check.cjs             # BDE-roster importer check (fict
 - Excluding a Soldier from a roster needs a reason on Personnel (para 10c).
 - Brought-forward numbers come from the Personnel `BF #` columns. **Close & restart DA 6s** archives the rosters and carries the current numbers forward.
 
+Local flag-detail policy: SFCs are not on the FLAG roster (rank band PVT-SSG). On flag slots, an available SSG is suggested first, in DA 6 order, and anyone else in the slot's grade band goes only when no SSG is available (**Flag detail: rank first** on Settings; blank turns it off). The grade band written in a slot's position (for example `E5-E6` or `NCOIC (E6)`) is enforced: suggestions stay inside it and Check flags `WRONG GRADE FOR SLOT`.
+
 The regulation doesn't cover ties or rest between duties, so both are settings: **Tie-break** (fewest G2 details first, the default; or roster order; or junior first) and **Rest window**.
 
 Two documented choices: new Soldiers are sorted into grade order rather than added at the foot of the roster (para 5c says they *can* be added at the foot), and a performed duty is shown as `0` rather than a diagonal line (para 10b).
