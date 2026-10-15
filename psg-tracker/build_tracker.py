@@ -17,6 +17,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter as CL
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.dimensions import ColumnDimension
+from openpyxl.worksheet.hyperlink import Hyperlink
 
 try:  # real roster data stays local (git-ignored); the example set ships with the repo
     import seed_data_private as S
@@ -161,6 +162,14 @@ def dv_list(ws, ref, sqref, allow_blank=True, error=True):
     dv.add(sqref)
 
 
+def link_to(cell, tab):
+    """Jump link to another tab. Google Sheets converts it to =HYPERLINK("#gid=...", <formula>) on import,
+    which only keeps the cell text when the cell holds a formula."""
+    if not (isinstance(cell.value, str) and cell.value.startswith("=")):
+        cell.value = '="%s"' % str(cell.value or "").replace('"', '""')
+    cell.hyperlink = Hyperlink(ref=cell.coordinate, location="'%s'!A1" % tab)
+
+
 def base_font(ws, r1, r2, c1, c2):
     for r in range(r1, r2 + 1):
         for c in range(c1, c2 + 1):
@@ -172,11 +181,11 @@ def base_font(ws, r1, r2, c1, c2):
 # ----------------------------------------------------------------------------
 wb = Workbook()
 wb.remove(wb.active)
-TABS = ["Dashboard", "Duty Slots", "Next Up"] + [r[1] for r in S.ROSTERS] + [
+TABS = ["Dashboard", "Duty Slots", "Conflicts", "Next Up"] + [r[1] for r in S.ROSTERS] + [
     "Personnel", "Availability", "Appointments", "Equipment", "Taskings", "Settings",
     "Dash Data"]
 WS = {name: wb.create_sheet(name) for name in TABS}
-TAB_COLOR = {"Dashboard": NAVY, "Duty Slots": "EDA100", "Next Up": "1BAF7A", "Personnel": SLATE,
+TAB_COLOR = {"Dashboard": NAVY, "Duty Slots": "EDA100", "Conflicts": "C77700", "Next Up": "1BAF7A", "Personnel": SLATE,
              "Availability": SLATE, "Appointments": "6250D6", "Equipment": "6250D6",
              "Taskings": "6250D6", "Settings": "7F7F7F", "Dash Data": "BFBFBF"}
 for r in S.ROSTERS:
@@ -202,10 +211,10 @@ settings_rows = [
     ("Look-ahead window (days)", 14, "Dashboard 'upcoming' and 'open slots' window."),
     ("Equipment inventory cycle (days)", 30, "Next inventory due = last inventory + this many days."),
     ("PSG", S.PSG_LABEL, "Shown on the dashboard banner."),
-    ("Shared view file ID", None, "Filled automatically by the Apps Script 'Publish shared view'."),
+    ("Shared view file ID", getattr(S, "SHARED_VIEW_ID", None), "Filled automatically by the Apps Script 'Publish shared view'."),
     ("Exemption request form URL", None, "Filled automatically by the Apps Script 'Create exemption request form'."),
     ("Close-out (archive) log", None, "Filled automatically when you close/restart the DA 6s."),
-    ("One-slider file ID", None, "Filled automatically by the Apps Script 'Build / refresh one-slider brief'."),
+    ("One-slider file ID", getattr(S, "ONE_SLIDER_ID", None), "Filled automatically by the Apps Script 'Build / refresh one-slider brief'."),
     ("Brief marking (optional)", None, "Banner text for the one-slider (top and footer), per your unit SOP. Blank = none."),
     ("Flag detail: rank first", "SSG", "Local policy. On FLAG slots, an available Soldier of this rank is suggested before anyone else "
      "in the slot's grade band (for example E5-E6), in DA 6 order. Others go only when none is available. Blank = DA 6 order only."),
@@ -859,6 +868,36 @@ for r in range(4, 5):
             cell.fill = fill(SLATE)
 
 # ============================================================================
+# CONFLICTS (the rows behind the Dashboard "CONFLICTS FLAGGED" tile)
+# ============================================================================
+ws = WS["Conflicts"]
+CF_HEAD = ["Date", "Through", "Duty", "Position / detail", "Soldier", "Rank", "Section", "Problem (Check)",
+           "Duty Slots row", "Go to slot"]
+banner(ws, "CONFLICTS · G2 slots that need a fix",
+       "The same rows the Dashboard tile counts: slots from the start of this month on that have a Soldier and a ⚠ "
+       "in Duty Slots ▸ Check. Fix them on Duty Slots (Go to slot jumps to the row); this list updates by itself.",
+       len(CF_HEAD) - 1)
+ws["J1"].fill = fill(NAVY)
+ws["J2"] = '="Open Duty Slots ▸"'
+link_to(ws["J2"], "Duty Slots")
+ws["J2"].font = font(10, True, NAVY)
+ws["J2"].alignment = Alignment(horizontal="center", vertical="center")
+header_row(ws, 3, CF_HEAD, auto_from=set(CF_HEAD), widths=[12, 12, 14, 26, 26, 8, 12, 52, 10, 14])
+ws["A4"] = F('=IFERROR(SORT(FILTER(HSTACK(<SL_A>,<SL_P>,<SL_D>,<SL_E>,<SL_F>,<SL_H>,<SL_I>,<SL_L>,ROW(<SL_A>)),'
+             'LEFT(<SL_L>,1)="⚠",<SL_F><>"",<SL_A>>=<MS>),1,TRUE),"✓ No conflicts from the start of this month on")')
+# the gid of Duty Slots comes from the J2 link once Google has imported the file
+ws["J4"] = ('=MAP(I4:I203,LAMBDA(r,IF(ISNUMBER(r),IFERROR(HYPERLINK("#gid="&REGEXEXTRACT(FORMULATEXT($J$2),"gid=(\\d+)")'
+            '&"&range=A"&r&":P"&r,"Go to row "&r),"row "&r),"")))')
+date_fmt(ws, ["A", "B"], 4, 203, "ddd dd mmm")
+for r in range(4, 34):
+    for c in range(1, len(CF_HEAD) + 1):
+        cell = ws.cell(row=r, column=c)
+        cell.font = font(9, c in (5, 8), CRIT if c == 8 else INK)
+        cell.border = Border(bottom=Side(style="hair", color=LINE))
+        cell.alignment = Alignment(vertical="top", wrap_text=c in (4, 8))
+ws.freeze_panes = "A4"
+
+# ============================================================================
 # DASHBOARD
 # ============================================================================
 ws = WS["Dashboard"]
@@ -883,7 +922,7 @@ ws["B2"].alignment = Alignment(vertical="center", indent=1)
 ws.row_dimensions[2].height = 22
 
 
-def tile(r, c, label, value_f, note_f, fmt=None):
+def tile(r, c, label, value_f, note_f, fmt=None, target=None):
     """KPI tile: 2 columns x 3 rows (label / value / note)."""
     for rr in range(r, r + 3):
         ws.merge_cells(start_row=rr, start_column=c, end_row=rr, end_column=c + 1)
@@ -904,23 +943,26 @@ def tile(r, c, label, value_f, note_f, fmt=None):
     n = ws.cell(row=r + 2, column=c, value=note_f)
     n.font = font(9, False, INK2)
     n.alignment = Alignment(horizontal="center", vertical="top", wrap_text=True)
+    if target:
+        for cell in (a, v, n):
+            link_to(cell, target)
 
 
 tiles = [
-    ("ASSIGNED STRENGTH", f"={DD}AE5", f'="Vacant: "&{DD}AE6&"  ·  duty-eligible: "&{DD}AE20', None),
-    ("PRESENT FOR DUTY", f"={DD}AE9", f'={DD}AE8&" available  ·  "&{DD}AE7&" out today"', "0%"),
-    ("G2 SLOTS FILLED (MONTH)", f"={DD}AE12", f'={DD}AE11&" of "&{DD}AE10&" · "&TEXT({DD}B2,"mmm yy")', "0%"),
-    ("OPEN SLOTS (LOOK-AHEAD)", f"={DD}AE13", F('=IF(<DD>AE13=0,"✓ none in next "&<LOOK>&" days","⚠ fill within "&<LOOK>&" days")', DD=DD), None),
-    ("CONFLICTS FLAGGED", f"={DD}AE14", f'=IF({DD}AE14=0,"✓ none","⚠ see Duty Slots ▸ Check")', None),
-    ("NEXT 7 DAYS · APPOINTMENTS", f"={DD}AE19", '="scheduled"', None),
-    ("OPEN TASKINGS", f"={DD}AE15", f'=IF({DD}AE16=0,"✓ none overdue / short","⚠ "&{DD}AE16&" overdue or short")', None),
-    ("EQUIPMENT NMC / MISSING", f"={DD}AE17", f'={DD}AE18&" inventories due or overdue"', None),
-    ("DA 6 CAPACITY", f'={DD}AE21&"/71"', '="columns used on fullest DA 6"', None),
+    ("ASSIGNED STRENGTH", f"={DD}AE5", f'="Vacant: "&{DD}AE6&"  ·  duty-eligible: "&{DD}AE20', None, "Personnel"),
+    ("PRESENT FOR DUTY", f"={DD}AE9", f'={DD}AE8&" available  ·  "&{DD}AE7&" out today"', "0%", "Availability"),
+    ("G2 SLOTS FILLED (MONTH)", f"={DD}AE12", f'={DD}AE11&" of "&{DD}AE10&" · "&TEXT({DD}B2,"mmm yy")', "0%", "Duty Slots"),
+    ("OPEN SLOTS (LOOK-AHEAD)", f"={DD}AE13", F('=IF(<DD>AE13=0,"✓ none in next "&<LOOK>&" days","⚠ fill within "&<LOOK>&" days")', DD=DD), None, "Duty Slots"),
+    ("CONFLICTS FLAGGED", f"={DD}AE14", f'=IF({DD}AE14=0,"✓ none","⚠ click to see the list")', None, "Conflicts"),
+    ("NEXT 7 DAYS · APPOINTMENTS", f"={DD}AE19", '="scheduled"', None, "Appointments"),
+    ("OPEN TASKINGS", f"={DD}AE15", f'=IF({DD}AE16=0,"✓ none overdue / short","⚠ "&{DD}AE16&" overdue or short")', None, "Taskings"),
+    ("EQUIPMENT NMC / MISSING", f"={DD}AE17", f'={DD}AE18&" inventories due or overdue"', None, "Equipment"),
+    ("DA 6 CAPACITY", f'={DD}AE21&"/71"', '="columns used on fullest DA 6"', None, "Next Up"),
 ]
-for k, (lab, vf, nf, fmt) in enumerate(tiles):
+for k, (lab, vf, nf, fmt, target) in enumerate(tiles):
     r = 4 + (k // 3) * 4
     c = 2 + (k % 3) * 2
-    tile(r, c, lab, vf, nf, fmt)
+    tile(r, c, lab, vf, nf, fmt, target)
 # status coloring on tiles (icon + label already in the note)
 ws.conditional_formatting.add("B9", FormulaRule(formula=['INDIRECT("\'Dash Data\'!AE13")>0'], font=Font(name=FONT, bold=True, size=24, color=CRIT)))
 ws.conditional_formatting.add("D9", FormulaRule(formula=['INDIRECT("\'Dash Data\'!AE14")>0'], font=Font(name=FONT, bold=True, size=24, color="C77700")))
@@ -1175,7 +1217,7 @@ howto = [
     ("2. Settings: confirm rank bands, holidays/DONSAs, rest window and tie-break. Personnel: enter any brought-forward (BF #) numbers from the outgoing PSG.", ""),
     ("3. " + S.HOWTO_AVAILABILITY, ""),
     ("Daily loop", "h2"),
-    ("1. Dashboard: read the BLUF; act on OPEN SLOTS and CONFLICTS (red/amber tiles).", ""),
+    ("1. Dashboard: read the BLUF; act on OPEN SLOTS and CONFLICTS (red/amber tiles). Click any tile to jump to its list.", ""),
     ("2. New BDE roster: paste it into a new tab ▸ G2 PSG ▸ Import G2 slots (or type the G2-labeled slots on Duty Slots).", ""),
     ("3. Open slots: use 'Suggested (next up)' or G2 PSG ▸ Auto-fill open G2 slots. Leave/pass/TDY/appointments go on Availability.", ""),
     ("4. G2 PSG ▸ Publish shared view gives section sergeants a no-PII copy; the request form feeds the Requests tab (tick Approve).", ""),

@@ -31,7 +31,8 @@ TZ=UTC node tests/parser.check.cjs             # BDE-roster importer check (fict
 
 | Tab | Purpose |
 |---|---|
-| Dashboard | Main tab: KPI tiles, BLUF, next-up per DA 6 (with sparklines), this month by roster, unavailable today, upcoming duties, tracker registry, 7 charts and the mind map. |
+| Dashboard | Main tab: KPI tiles (click any tile to jump to the tab behind it), BLUF, next-up per DA 6 (with sparklines), this month by roster, unavailable today, upcoming duties, tracker registry, 7 charts and the mind map. |
+| Conflicts | The rows behind the CONFLICTS FLAGGED tile: every slot this month on with a Soldier and a ⚠ in Check, the problem, and a "Go to row" link to the slot on Duty Slots. |
 | Duty Slots | One row per G2 slot (only slots labeled G2). The Check column flags conflicts; Suggested shows the next-up Soldier who is available. |
 | Next Up | Who is next on each DA 6: highest number first, with each Soldier's availability today. |
 | DA6 CQ NCO / CQ RUNNER / SD RUNNER / SDNCO / FLAG / ROAD GUARD | DA Form 6 grids built automatically from Duty Slots and Availability, one per duty (AR 220-45 para 4b). If a Soldier is tasked on one duty within the rest window, they are coded `D` on every other roster and are never suggested, so no one is double tasked. |
