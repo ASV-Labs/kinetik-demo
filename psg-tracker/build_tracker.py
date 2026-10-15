@@ -226,10 +226,11 @@ settings_rows = [
     ("Avoid runner + flag in one month", "Y", "Local policy. Y = suggestions skip anyone on flag detail that month for a runner slot "
      "(and anyone with a runner detail for a flag slot) unless no one else is available; Check flags RUNNER + FLAG SAME MONTH. Blank = off."),
     ("Overnight duties (next day off)", "CQ NCO, CQ Runner, SD NCO, SD Runner, SD OIC (Officer)",
-     "Duties worked overnight with the next day off (Duty names as on Duty Slots, comma-separated). Example: duty Monday, work "
-     "into Tuesday until about 0900, off the rest of Tuesday, back to work Wednesday. Nothing else is suggested on the day off "
-     "(Tuesday), whatever the rest window; with the default 1-day rest window a duty on Wednesday is fine. Check flags ON DAY OFF AFTER OVERNIGHT DUTY; the day off "
-     "codes D on other DA 6s."),
+     "Duties worked overnight with the next day off (Duty names as on Duty Slots, comma-separated). Whatever day the duty "
+     "falls on, the Soldier works into the next morning (about 0900), has the rest of that next day off, and is back the day "
+     "after (e.g. duty Thursday, off Friday, back Saturday). Always counted from the duty date, never a fixed weekday. Nothing "
+     "else is suggested on the day off, whatever the rest window; with the default 1-day rest window the day after that is "
+     "open. Check flags ON DAY OFF AFTER OVERNIGHT DUTY; the day off codes D on other DA 6s."),
 ]
 for i, (k, v, n) in enumerate(settings_rows, start=4):
     ws.cell(row=i, column=1, value=k).font = font(10, True)
