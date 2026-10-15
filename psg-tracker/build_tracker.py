@@ -71,7 +71,7 @@ T = {
     "SL_A": f"{SL}$A$4:$A${SLN}", "SL_B": f"{SL}$B$4:$B${SLN}", "SL_D": f"{SL}$D$4:$D${SLN}",
     "SL_E": f"{SL}$E$4:$E${SLN}", "SL_F": f"{SL}$F$4:$F${SLN}", "SL_G": f"{SL}$G$4:$G${SLN}",
     "SL_H": f"{SL}$H$4:$H${SLN}", "SL_I": f"{SL}$I$4:$I${SLN}", "SL_J": f"{SL}$J$4:$J${SLN}",
-    "SL_L": f"{SL}$L$4:$L${SLN}", "SL_M": f"{SL}$M$4:$M${SLN}", "SL_P": f"{SL}$P$4:$P${SLN}",
+    "SL_L": f"{SL}$L$4:$L${SLN}", "SL_M": f"{SL}$M$4:$M${SLN}", "SL_P": f"{SL}$P$4:$P${SLN}", "SL_Q": f"{SL}$Q$4:$Q${SLN}",
     "AV_A": f"{AV}$A$4:$A${AVN}", "AV_B": f"{AV}$B$4:$B${AVN}", "AV_C": f"{AV}$C$4:$C${AVN}",
     "AV_D": f"{AV}$D$4:$D${AVN}", "AV_E": f"{AV}$E$4:$E${AVN}", "AV_G": f"{AV}$G$4:$G${AVN}",
     "AV_H": f"{AV}$H$4:$H${AVN}", "AV_I": f"{AV}$I$4:$I${AVN}", "AV_J": f"{AV}$J$4:$J${AVN}",
@@ -82,7 +82,7 @@ T = {
     "PE_ELIG": f"{PE}${L_E1}$4:${L_E2}${PEN}", "PE_DET": f"{PE}${L_DET}$4:${L_DET}${PEN}",
     "START": f"{ST}$B$4", "REST": f"{ST}$B$5", "TIE": f"{ST}$B$6", "UNIT": f"{ST}$B$7",
     "ASOF": f"{ST}$B$9", "LOOK": f"{ST}$B$10", "CYCLE": f"{ST}$B$11", "PSG": f"{ST}$B$12", "FLAGPREF": f"{ST}$B$18", "MAXMO": f"{ST}$B$19",
-    "RUNMAX": f"{ST}$B$20", "RUNFLAG": f"{ST}$B$21",
+    "RUNMAX": f"{ST}$B$20", "RUNFLAG": f"{ST}$B$21", "OVN": f"{ST}$B$22",
     "HOL": f"{ST}$Y$4:$Y$60", "RANKTBL": f"{ST}$E$4:$H$40", "DUTYTBL": f"{ST}$P$4:$Q$30",
     "ABSTBL": f"{ST}$T$4:$V$40", "ROSTER_ARR": ROSTER_ARR,
     "MS": "'Dash Data'!$B$2", "ME": "'Dash Data'!$D$2",
@@ -225,6 +225,9 @@ settings_rows = [
      "together. Suggestions never go past this; Check flags TOO MANY RUNNER DETAILS. Blank = no limit."),
     ("Avoid runner + flag in one month", "Y", "Local policy. Y = suggestions skip anyone on flag detail that month for a runner slot "
      "(and anyone with a runner detail for a flag slot) unless no one else is available; Check flags RUNNER + FLAG SAME MONTH. Blank = off."),
+    ("Overnight duties (next day off)", "CQ NCO, CQ Runner, SD NCO, SD Runner, SD OIC (Officer)",
+     "Duties worked overnight with the next day off (Duty names as on Duty Slots, comma-separated). Nothing else is suggested "
+     "on the day off, whatever the rest window; Check flags ON DAY OFF AFTER OVERNIGHT DUTY; the day off codes D on other DA 6s."),
 ]
 for i, (k, v, n) in enumerate(settings_rows, start=4):
     ws.cell(row=i, column=1, value=k).font = font(10, True)
@@ -339,8 +342,10 @@ ws[f"{L_ORD}4"] = F('=MAP(C4:C<N>,LAMBDA(r,IF(r="","",IFERROR(VLOOKUP(r,<RANKTBL
 ws[f"{L_STAT}4"] = F('=MAP(B4:B<N>,D4:D<N>,LAMBDA(n,st,IF(OR(n="",n="VACANT"),"",IF(st="Departed","Departed",'
              'LET(d,<ASOF>,IF(COUNTIFS(<SL_F>,n,<SL_A>,"<="&d,<SL_P>,">="&d,<SL_G>,"<>Cancelled")>0,'
              '"ON DUTY · "&IFERROR(INDEX(FILTER(<SL_D>,<SL_F>=n,<SL_A><=d,<SL_P>>=d,<SL_G><>"Cancelled"),1),""),'
+             'IF(COUNTIFS(<SL_F>,n,<SL_A>,"<="&d,<SL_Q>,">="&d,<SL_G>,"<>Cancelled")>0,'
+             '"DAY OFF · after "&IFERROR(INDEX(FILTER(<SL_D>,<SL_F>=n,<SL_A><=d,<SL_Q>>=d,<SL_G><>"Cancelled"),1),"duty"),'
              'IFERROR(INDEX(ARRAYFORMULA(FILTER(<AV_I>&" · "&<AV_B>&" until "&IF(<AV_D>="","open",TEXT(<AV_D>,"dd mmm")),'
-             '<AV_A>=n,<AV_C><=d,<AV_M>>=d,<AV_J>="Y")),1),"✓ Available")))))))', N=r2)
+             '<AV_A>=n,<AV_C><=d,<AV_M>>=d,<AV_J>="Y")),1),"✓ Available"))))))))', N=r2)
 for idx, (key, tab, mn, mx, _) in enumerate(S.ROSTERS):
     col = CL(PC_ELIG + idx)
     ws[f"{col}4"] = F('=MAP(B4:B<N>,D4:D<N>,E4:E<N>,<O>4:<O><N>,LAMBDA(n,st,ex,o,IF(AND(n<>"",n<>"VACANT",'
@@ -409,13 +414,13 @@ ws.auto_filter.ref = f"A3:L{N}"
 ws = WS["Duty Slots"]
 D_HEAD = ["Date", "End date (multi-day)", "Day", "Duty", "Position / detail", "Soldier", "Status",
           "Rank", "Section", "DA 6 roster", "Wknd / Hol", "Check", "Suggested (next up)", "Remarks",
-          "Source", "End (calc)"]
-D_AUTO = {"Day", "Rank", "Section", "DA 6 roster", "Wknd / Hol", "Check", "Suggested (next up)", "End (calc)"}
+          "Source", "End (calc)", "Off through (calc)"]
+D_AUTO = {"Day", "Rank", "Section", "DA 6 roster", "Wknd / Hol", "Check", "Suggested (next up)", "End (calc)", "Off through (calc)"}
 banner(ws, "DUTY SLOTS · every G2-labeled slot from the BDE roster",
        "Enter only slots labeled G2. Date + Duty create the requirement; picking a Soldier posts it to the right DA 6 "
        "automatically (one DA 6 per duty). 'Suggested' shows the next eligible, available Soldier "
-       "in DA 6 order; 'Check' flags double-tasking, back-to-back duty, rank band and availability.", 16)
-header_row(ws, 3, D_HEAD, D_AUTO, [12, 12, 6, 17, 24, 28, 12, 7, 10, 12, 10, 44, 28, 40, 18, 11])
+       "in DA 6 order; 'Check' flags double-tasking, the day off after overnight duty, back-to-back duty, rank band and availability.", 16)
+header_row(ws, 3, D_HEAD, D_AUTO, [12, 12, 6, 17, 24, 28, 12, 7, 10, 12, 10, 44, 28, 40, 18, 11, 11])
 asof_seed = date(2026, 10, 13)
 for i, (s, e, duty, pos, who, rm, *src) in enumerate(S.SLOTS, start=4):
     ws.cell(row=i, column=1, value=s)
@@ -438,12 +443,16 @@ ws["I4"] = F('=MAP(F4:F<N>,LAMBDA(n,IF(n="","",IFERROR(INDEX(<PE_A>,MATCH(n,<PE_
 ws["J4"] = F('=MAP(D4:D<N>,LAMBDA(t,IF(t="","",IFERROR(VLOOKUP(t,<DUTYTBL>,2,FALSE)&"","N/A"))))', N=N)
 ws["K4"] = F('=MAP(A4:A<N>,LAMBDA(a,IF(a="","",IF(COUNTIF(<HOL>,a)>0,"HOLIDAY",IF(WEEKDAY(a,2)>5,"WEEKEND","")))))', N=N)
 ws["P4"] = F('=MAP(A4:A<N>,B4:B<N>,LAMBDA(a,b,IF(a="","",IF(b="",a,b))))', N=N)
+# last day the Soldier is tied up: the end, plus the day off after an overnight duty (Settings list)
+ws["Q4"] = F('=MAP(A4:A<N>,D4:D<N>,P4:P<N>,LAMBDA(a,t,p,IF(a="","",p+IF(AND(<OVN><>"",'
+             'ISNUMBER(SEARCH(", "&t&",",", "&<OVN>&","))),1,0))))', N=N)
 ws["L4"] = F(
-    '=MAP(A4:A<N>,F4:F<N>,G4:G<N>,J4:J<N>,P4:P<N>,E4:E<N>,LAMBDA(a,f,g,r,p,e,IF(a="","",IF(g="Cancelled","— cancelled",'
+    '=MAP(A4:A<N>,F4:F<N>,G4:G<N>,J4:J<N>,P4:P<N>,E4:E<N>,Q4:Q<N>,LAMBDA(a,f,g,r,p,e,q,IF(a="","",IF(g="Cancelled","— cancelled",'
     'IF(f="","⚠ UNFILLED",LET(onp,ISNUMBER(MATCH(f,<PE_B>,0)),ri,IFERROR(MATCH(r,<ROSTER_ARR>,0),0),'
     'el,IF(OR(NOT(onp),ri=0),TRUE,INDEX(<PE_ELIG>,MATCH(f,<PE_B>,0),ri)="✓"),'
     '<BAND>,sg,IF(OR(NOT(onp),lo=0),TRUE,LET(gq,<GRADE_OF_f>,AND(gq>=lo,gq<=hi))),'
     'ov,COUNTIFS(<SL_F>,f,<SL_A>,"<="&p,<SL_P>,">="&a,<SL_G>,"<>Cancelled"),'
+    'ovo,COUNTIFS(<SL_F>,f,<SL_A>,"<="&q,<SL_Q>,">="&a,<SL_G>,"<>Cancelled"),'
     'rs,COUNTIFS(<SL_F>,f,<SL_A>,"<="&(p+<REST>),<SL_P>,">="&(a-<REST>),<SL_G>,"<>Cancelled"),'
     'ab,IFERROR(INDEX(FILTER(<AV_B>,<AV_A>=f,<AV_C><=p,<AV_M>>=a,<AV_J>="Y"),1),""),'
     'rq,IFERROR(INDEX(FILTER(<AV_E>,<AV_A>=f,<AV_C><=p,<AV_M>>=a,<AV_J>="N"),1),""),'
@@ -455,7 +464,8 @@ ws["L4"] = F(
     'IF(OR(<MAXMO>="",COUNTIFS(<SL_F>,f,<SL_A>,">="&(EOMONTH(a,-1)+1),<SL_A>,"<="&EOMONTH(a,0),<SL_G>,"<>Cancelled")<=<MAXMO>),"","OVER MONTHLY CAP"),'
     'IF(AND(isr,<RUNMAX><>"",rn><RUNMAX>),"TOO MANY RUNNER DETAILS THIS MONTH",""),'
     'IF(AND(<RUNFLAG>="Y",OR(AND(isr,fl>0),AND(r="FLAG",rn>0))),"RUNNER + FLAG SAME MONTH",""),'
-    'IF(ov>1,"DOUBLE-TASKED",""),IF(rs>ov,"BACK-TO-BACK",""),IF(ab="","","UNAVAILABLE: "&ab),'
+    'IF(ov>1,"DOUBLE-TASKED",IF(ovo>1,"ON DAY OFF AFTER OVERNIGHT DUTY","")),IF(rs>MAX(ov,ovo),"BACK-TO-BACK",""),'
+    'IF(ab="","","UNAVAILABLE: "&ab),'
     'IF(rq="","","REQUEST: "&rq)),IF(m="","✓ OK","⚠ "&m)))))))', N=N,
     BAND=SLOT_BAND.replace("<POS>", "e"), GRADE_OF_f=GRADE_OF.replace("<WHO>", "f"))
 NU_COLS = []
@@ -467,7 +477,7 @@ ws["M4"] = F(
     'd,INDEX(A4:A<N>,i),r,INDEX(J4:J<N>,i),'
     'ok,AND(d<>"",INDEX(F4:F<N>,i)="",INDEX(G4:G<N>,i)<>"Cancelled",ISNUMBER(MATCH(r,<ROSTER_ARR>,0))),'
     'pk,IF(NOT(ok),"",IF(d<<ASOF>,"(past date)",IFERROR(LET(q,CHOOSE(MATCH(r,<ROSTER_ARR>,0),<QS>),'
-    'pe,INDEX(P4:P<N>,i),ps,INDEX(E4:E<N>,i),<BAND>,'
+    'pe,INDEX(P4:P<N>,i),qe,INDEX(Q4:Q<N>,i),ps,INDEX(E4:E<N>,i),<BAND>,'
     'mk,"#"&TEXT(d,"yyyymm")&"¦",ym,TEXT(d,"yyyymm"),isr,ISNUMBER(SEARCH("RUNNER",r)),'
     'rnm,LAMBDA(n,COUNTIFS(<SL_F>,n,<SL_J>,"*RUNNER*",<SL_A>,">="&(EOMONTH(d,-1)+1),<SL_A>,"<="&EOMONTH(d,0),<SL_G>,"<>Cancelled")+(LEN(used)-LEN(SUBSTITUTE(used,"¦"&n&"!R"&ym&"¦","")))/LEN("¦"&n&"!R"&ym&"¦")),'
     'flm,LAMBDA(n,COUNTIFS(<SL_F>,n,<SL_J>,"FLAG",<SL_A>,">="&(EOMONTH(d,-1)+1),<SL_A>,"<="&EOMONTH(d,0),<SL_G>,"<>Cancelled")+(LEN(used)-LEN(SUBSTITUTE(used,"¦"&n&"!F"&ym&"¦","")))/LEN("¦"&n&"!F"&ym&"¦")),'
@@ -475,8 +485,10 @@ ws["M4"] = F(
     'OR(lo=0,LET(gq,<GRADE_OF_n>,AND(gq>=lo,gq<=hi))),'
     'COUNTIFS(<AV_A>,n,<AV_C>,"<="&pe,<AV_M>,">="&d,<AV_J>,"Y")=0,'
     'COUNTIFS(<SL_F>,n,<SL_A>,"<="&(pe+<REST>),<SL_P>,">="&(d-<REST>),<SL_G>,"<>Cancelled")=0,'
+    'COUNTIFS(<SL_F>,n,<SL_A>,"<="&qe,<SL_Q>,">="&d,<SL_G>,"<>Cancelled")=0,'
     'ISERROR(FIND("¦"&r&":"&n&"¦",used)),'
-    'SUMPRODUCT(--ISNUMBER(FIND("¦"&n&"@"&(d+SEQUENCE(2*<REST>+1,1,-<REST>))&"¦",used)))=0,'
+    'SUMPRODUCT(--ISNUMBER(FIND("¦"&n&"@"&SEQUENCE(pe-d+2*<REST>+1,1,d-<REST>)&"¦",used)))=0,'
+    'SUMPRODUCT(--ISNUMBER(FIND("¦"&n&"~"&SEQUENCE(qe-d+1,1,d)&"¦",used)))=0,'
     'OR(NOT(isr),<RUNMAX>="",rnm(n)<<RUNMAX>)))))),'
     'candf,IF(OR(<RUNFLAG><>"Y",AND(NOT(isr),r<>"FLAG")),cand0,IFERROR(FILTER(cand0,MAP(cand0,LAMBDA(n,'
     'IF(isr,flm(n),rnm(n))=0))),cand0)),'
@@ -487,12 +499,14 @@ ws["M4"] = F(
     'IFERROR(VLOOKUP(n,<PE_BC>,2,FALSE),"")=<FLAGPREF>))),1),"")),'
     'IF(sp<>"",sp,INDEX(cand,1))),'
     '"⚠ none available"))),'
-    'nu,IF(OR(pk="",LEFT(pk,1)="⚠",LEFT(pk,1)="("),used,used&"¦"&r&":"&pk&"¦"&pk&"@"&d&"¦"&pk&"#"&TEXT(d,"yyyymm")&"¦"'
+    'nu,IF(OR(pk="",LEFT(pk,1)="⚠",LEFT(pk,1)="("),used,used&"¦"&r&":"&pk&"¦"'
+    '&TEXTJOIN("¦",TRUE,pk&"@"&SEQUENCE(INDEX(P4:P<N>,i)-d+1,1,d))&"¦"'
+    '&IF(INDEX(Q4:Q<N>,i)>INDEX(P4:P<N>,i),pk&"~"&INDEX(Q4:Q<N>,i)&"¦","")&pk&"#"&TEXT(d,"yyyymm")&"¦"'
     '&pk&"!"&IF(ISNUMBER(SEARCH("RUNNER",r)),"R",IF(r="FLAG","F","O"))&TEXT(d,"yyyymm")&"¦"),'
     'nu&"§"&pk))),MAP(out,LAMBDA(x,IFERROR(REGEXEXTRACT(x,"§(.*)$"),""))))',
     N=N, CNT=N - 3, QS=",".join(NU_COLS), BAND=SLOT_BAND.replace("<POS>", "ps"),
     GRADE_OF_n=GRADE_OF.replace("<WHO>", "n"))
-date_fmt(ws, ["A", "B", "P"], 4, N, "dd mmm yy")
+date_fmt(ws, ["A", "B", "P", "Q"], 4, N, "dd mmm yy")
 tint(ws, list("CHIJKLMP"), 4, 300)
 dv_list(ws, f"{ST}$P$4:$P$30", f"D4:D{N}")
 dv_list(ws, f"{T['PE_B']}", f"F4:F{N}")
@@ -507,6 +521,7 @@ ws.conditional_formatting.add(f"M4:M{N}", FormulaRule(formula=['AND($M4<>"",LEFT
                                                       fill=fill(GOOD_BG), font=Font(name=FONT, bold=True)))
 ws.conditional_formatting.add(f"A4:O{N}", FormulaRule(formula=['AND($A4<>"",$A4=INDIRECT("Settings!B9"))'], fill=fill("DCE9F9")))
 ws.column_dimensions["P"].hidden = True
+ws.column_dimensions["Q"].hidden = True
 ws.freeze_panes = "B4"
 ws.auto_filter.ref = f"A3:O{N}"
 
@@ -577,14 +592,15 @@ for idx, (key, tab, mn, mx, nature) in enumerate(S.ROSTERS):
     ws["D8"] = F('=MAP(B8:B127,LAMBDA(n,IF(n="","",IFERROR(INDEX(<PE_ORD>,MATCH(n,<PE_B>,0)),""))))')
     ws["E8"] = F('=MAP(B8:B127,LAMBDA(n,IF(n="","",IFERROR(INDEX(<BF>,MATCH(n,<PE_B>,0))*1,0))))', BF=bf_col)
     ws["G8"] = F('=MAP(B8:B127,LAMBDA(n,IF(n="","",LET(d,<ASOF>,IF(COUNTIFS(<SL_F>,n,<SL_A>,"<="&d,<SL_P>,">="&d,'
-                 '<SL_G>,"<>Cancelled")>0,"ON DUTY",IFERROR(INDEX(ARRAYFORMULA(FILTER(<AV_I>&" · "&<AV_B>,<AV_A>=n,<AV_C><=d,<AV_M>>=d,'
-                 '<AV_J>="Y")),1),"✓"))))))')
+                 '<SL_G>,"<>Cancelled")>0,"ON DUTY",IF(COUNTIFS(<SL_F>,n,<SL_A>,"<="&d,<SL_Q>,">="&d,<SL_G>,"<>Cancelled")>0,"DAY OFF",'
+                 'IFERROR(INDEX(ARRAYFORMULA(FILTER(<AV_I>&" · "&<AV_B>,<AV_A>=n,<AV_C><=d,<AV_M>>=d,'
+                 '<AV_J>="Y")),1),"✓")))))))')
     # status matrix (hidden): X = detailed, A / U / D, "-" = available & chargeable
     ws[f"{S1L}8"] = F(
         '=LET(nr,COUNTIF($B$8:$B$127,"?*"),nc,COUNT($<G1>$4:$<G2>$4),IF(OR(nr=0,nc=0),"",MAKEARRAY(nr,nc,LAMBDA(i,j,'
         'LET(n,INDEX($B$8:$B$127,i),d,INDEX($<G1>$4:$<G2>$4,1,j),'
         'IF(COUNTIFS(<SL_F>,n,<SL_A>,d,<SL_J>,"<KEY>",<SL_G>,"<>Cancelled")>0,"X",'
-        'IF(COUNTIFS(<SL_F>,n,<SL_A>,"<="&d,<SL_P>,">="&d,<SL_G>,"<>Cancelled")>0,"D",'
+        'IF(COUNTIFS(<SL_F>,n,<SL_A>,"<="&d,<SL_Q>,">="&d,<SL_G>,"<>Cancelled")>0,"D",'
         'IF(COUNTIFS(<AV_A>,n,<AV_C>,"<="&d,<AV_M>,">="&d,<AV_I>,"A")>0,"A",'
         'IF(COUNTIFS(<AV_A>,n,<AV_C>,"<="&d,<AV_M>,">="&d,<AV_I>,"U")>0,"U",'
         'IF(COUNTIFS(<AV_A>,n,<AV_C>,"<="&d,<AV_M>,">="&d,<AV_I>,"D")+COUNTIFS(<SL_F>,n,<SL_A>,"<="&(d+<REST>),'
