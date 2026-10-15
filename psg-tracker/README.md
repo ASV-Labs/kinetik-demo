@@ -60,6 +60,8 @@ Local flag-detail policy: SFCs are not on the FLAG roster (rank band PVT-SSG). O
 
 Local overwork guard: **Max G2 details per Soldier per month** on Settings (default 2). Suggestions skip anyone already at the cap in that month unless no one else is available, and Check flags `OVER MONTHLY CAP`. A Soldier who served any G2 duty on a posting date is coded `D` on the other rosters that day, even if an exemption is on file (the exemption evidently did not apply).
 
+Runner rule: **Runner details per Soldier per month** on Settings (default 1). CQ Runner and SD Runner count together (any DA 6 with RUNNER in its name). Suggestions never give a Soldier a second runner detail in a month, and Check flags `TOO MANY RUNNER DETAILS THIS MONTH`. **Avoid runner + flag in one month** (default Y) keeps anyone on flag detail that month off runner suggestions, and keeps anyone with a runner detail off flag suggestions, unless no one else is available. Check flags `RUNNER + FLAG SAME MONTH`.
+
 History: set **Roster FROM date** to the first month you have rosters for and enter those months' G2 slots and exemption-roster entries; the DA 6 numbers are rebuilt from that date.
 
 The regulation doesn't cover ties or rest between duties, so both are settings: **Tie-break** (fewest G2 details first, the default; or roster order; or junior first) and **Rest window**.

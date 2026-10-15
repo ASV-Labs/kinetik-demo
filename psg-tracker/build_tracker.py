@@ -82,6 +82,7 @@ T = {
     "PE_ELIG": f"{PE}${L_E1}$4:${L_E2}${PEN}", "PE_DET": f"{PE}${L_DET}$4:${L_DET}${PEN}",
     "START": f"{ST}$B$4", "REST": f"{ST}$B$5", "TIE": f"{ST}$B$6", "UNIT": f"{ST}$B$7",
     "ASOF": f"{ST}$B$9", "LOOK": f"{ST}$B$10", "CYCLE": f"{ST}$B$11", "PSG": f"{ST}$B$12", "FLAGPREF": f"{ST}$B$18", "MAXMO": f"{ST}$B$19",
+    "RUNMAX": f"{ST}$B$20", "RUNFLAG": f"{ST}$B$21",
     "HOL": f"{ST}$Y$4:$Y$60", "RANKTBL": f"{ST}$E$4:$H$40", "DUTYTBL": f"{ST}$P$4:$Q$30",
     "ABSTBL": f"{ST}$T$4:$V$40", "ROSTER_ARR": ROSTER_ARR,
     "MS": "'Dash Data'!$B$2", "ME": "'Dash Data'!$D$2",
@@ -220,6 +221,10 @@ settings_rows = [
      "in the slot's grade band (for example E5-E6), in DA 6 order. Others go only when none is available. Blank = DA 6 order only."),
     ("Max G2 details per Soldier per month", 2, "Local policy against overwork. Suggestions skip anyone who already has this many G2 details "
      "in the slot's month, unless no one else is available; Check flags OVER MONTHLY CAP. Blank = no cap."),
+    ("Runner details per Soldier per month", 1, "Local policy. CQ Runner and SD Runner (any DA 6 with RUNNER in its name) count "
+     "together. Suggestions never go past this; Check flags TOO MANY RUNNER DETAILS. Blank = no limit."),
+    ("Avoid runner + flag in one month", "Y", "Local policy. Y = suggestions skip anyone on flag detail that month for a runner slot "
+     "(and anyone with a runner detail for a flag slot) unless no one else is available; Check flags RUNNER + FLAG SAME MONTH. Blank = off."),
 ]
 for i, (k, v, n) in enumerate(settings_rows, start=4):
     ws.cell(row=i, column=1, value=k).font = font(10, True)
@@ -233,6 +238,7 @@ ws["B8"].number_format = "dd mmm yyyy"
 ws["B9"].number_format = "dd mmm yyyy"
 ws["B9"].fill = fill(AUTO)
 dv_list(ws, '"Fewest details,Roster order,Junior first"', "B6")
+dv_list(ws, '"Y"', "B21")
 dv_list(ws, '"SSG,SGT"', "B18")
 for col, w in zip("ABC", (30, 22, 60)):
     ws.column_dimensions[col].width = w
@@ -441,9 +447,14 @@ ws["L4"] = F(
     'rs,COUNTIFS(<SL_F>,f,<SL_A>,"<="&(p+<REST>),<SL_P>,">="&(a-<REST>),<SL_G>,"<>Cancelled"),'
     'ab,IFERROR(INDEX(FILTER(<AV_B>,<AV_A>=f,<AV_C><=p,<AV_M>>=a,<AV_J>="Y"),1),""),'
     'rq,IFERROR(INDEX(FILTER(<AV_E>,<AV_A>=f,<AV_C><=p,<AV_M>>=a,<AV_J>="N"),1),""),'
+    'isr,ISNUMBER(SEARCH("RUNNER",r)),'
+    'rn,COUNTIFS(<SL_F>,f,<SL_J>,"*RUNNER*",<SL_A>,">="&(EOMONTH(a,-1)+1),<SL_A>,"<="&EOMONTH(a,0),<SL_G>,"<>Cancelled"),'
+    'fl,COUNTIFS(<SL_F>,f,<SL_J>,"FLAG",<SL_A>,">="&(EOMONTH(a,-1)+1),<SL_A>,"<="&EOMONTH(a,0),<SL_G>,"<>Cancelled"),'
     'm,TEXTJOIN(" · ",TRUE,IF(onp,"","NOT ON PERSONNEL"),IF(el,"","OUTSIDE RANK BAND / EXCLUDED"),'
     'IF(sg,"","WRONG GRADE FOR SLOT (E"&lo&IF(hi>lo,"-E"&hi,"")&")"),'
     'IF(OR(<MAXMO>="",COUNTIFS(<SL_F>,f,<SL_A>,">="&(EOMONTH(a,-1)+1),<SL_A>,"<="&EOMONTH(a,0),<SL_G>,"<>Cancelled")<=<MAXMO>),"","OVER MONTHLY CAP"),'
+    'IF(AND(isr,<RUNMAX><>"",rn><RUNMAX>),"TOO MANY RUNNER DETAILS THIS MONTH",""),'
+    'IF(AND(<RUNFLAG>="Y",OR(AND(isr,fl>0),AND(r="FLAG",rn>0))),"RUNNER + FLAG SAME MONTH",""),'
     'IF(ov>1,"DOUBLE-TASKED",""),IF(rs>ov,"BACK-TO-BACK",""),IF(ab="","","UNAVAILABLE: "&ab),'
     'IF(rq="","","REQUEST: "&rq)),IF(m="","✓ OK","⚠ "&m)))))))', N=N,
     BAND=SLOT_BAND.replace("<POS>", "e"), GRADE_OF_f=GRADE_OF.replace("<WHO>", "f"))
@@ -457,21 +468,27 @@ ws["M4"] = F(
     'ok,AND(d<>"",INDEX(F4:F<N>,i)="",INDEX(G4:G<N>,i)<>"Cancelled",ISNUMBER(MATCH(r,<ROSTER_ARR>,0))),'
     'pk,IF(NOT(ok),"",IF(d<<ASOF>,"(past date)",IFERROR(LET(q,CHOOSE(MATCH(r,<ROSTER_ARR>,0),<QS>),'
     'pe,INDEX(P4:P<N>,i),ps,INDEX(E4:E<N>,i),<BAND>,'
-    'mk,"#"&TEXT(d,"yyyymm")&"¦",'
+    'mk,"#"&TEXT(d,"yyyymm")&"¦",ym,TEXT(d,"yyyymm"),isr,ISNUMBER(SEARCH("RUNNER",r)),'
+    'rnm,LAMBDA(n,COUNTIFS(<SL_F>,n,<SL_J>,"*RUNNER*",<SL_A>,">="&(EOMONTH(d,-1)+1),<SL_A>,"<="&EOMONTH(d,0),<SL_G>,"<>Cancelled")+(LEN(used)-LEN(SUBSTITUTE(used,"¦"&n&"!R"&ym&"¦","")))/LEN("¦"&n&"!R"&ym&"¦")),'
+    'flm,LAMBDA(n,COUNTIFS(<SL_F>,n,<SL_J>,"FLAG",<SL_A>,">="&(EOMONTH(d,-1)+1),<SL_A>,"<="&EOMONTH(d,0),<SL_G>,"<>Cancelled")+(LEN(used)-LEN(SUBSTITUTE(used,"¦"&n&"!F"&ym&"¦","")))/LEN("¦"&n&"!F"&ym&"¦")),'
     'cand0,FILTER(q,MAP(q,LAMBDA(n,IF(n="",FALSE,AND('
     'OR(lo=0,LET(gq,<GRADE_OF_n>,AND(gq>=lo,gq<=hi))),'
     'COUNTIFS(<AV_A>,n,<AV_C>,"<="&pe,<AV_M>,">="&d,<AV_J>,"Y")=0,'
     'COUNTIFS(<SL_F>,n,<SL_A>,"<="&(pe+<REST>),<SL_P>,">="&(d-<REST>),<SL_G>,"<>Cancelled")=0,'
     'ISERROR(FIND("¦"&r&":"&n&"¦",used)),'
-    'SUMPRODUCT(--ISNUMBER(FIND("¦"&n&"@"&(d+SEQUENCE(2*<REST>+1,1,-<REST>))&"¦",used)))=0))))),'
-    'cand,IF(<MAXMO>="",cand0,IFERROR(FILTER(cand0,MAP(cand0,LAMBDA(n,'
+    'SUMPRODUCT(--ISNUMBER(FIND("¦"&n&"@"&(d+SEQUENCE(2*<REST>+1,1,-<REST>))&"¦",used)))=0,'
+    'OR(NOT(isr),<RUNMAX>="",rnm(n)<<RUNMAX>)))))),'
+    'candf,IF(OR(<RUNFLAG><>"Y",AND(NOT(isr),r<>"FLAG")),cand0,IFERROR(FILTER(cand0,MAP(cand0,LAMBDA(n,'
+    'IF(isr,flm(n),rnm(n))=0))),cand0)),'
+    'cand,IF(<MAXMO>="",candf,IFERROR(FILTER(candf,MAP(candf,LAMBDA(n,'
     'COUNTIFS(<SL_F>,n,<SL_A>,">="&(EOMONTH(d,-1)+1),<SL_A>,"<="&EOMONTH(d,0),<SL_G>,"<>Cancelled")'
-    '+(LEN(used)-LEN(SUBSTITUTE(used,"¦"&n&mk,"")))/LEN("¦"&n&mk)<<MAXMO>))),cand0)),'
+    '+(LEN(used)-LEN(SUBSTITUTE(used,"¦"&n&mk,"")))/LEN("¦"&n&mk)<<MAXMO>))),candf)),'
     'sp,IF(OR(r<>"FLAG",<FLAGPREF>=""),"",IFERROR(INDEX(FILTER(cand,MAP(cand,LAMBDA(n,'
     'IFERROR(VLOOKUP(n,<PE_BC>,2,FALSE),"")=<FLAGPREF>))),1),"")),'
     'IF(sp<>"",sp,INDEX(cand,1))),'
     '"⚠ none available"))),'
-    'nu,IF(OR(pk="",LEFT(pk,1)="⚠",LEFT(pk,1)="("),used,used&"¦"&r&":"&pk&"¦"&pk&"@"&d&"¦"&pk&"#"&TEXT(d,"yyyymm")&"¦"),'
+    'nu,IF(OR(pk="",LEFT(pk,1)="⚠",LEFT(pk,1)="("),used,used&"¦"&r&":"&pk&"¦"&pk&"@"&d&"¦"&pk&"#"&TEXT(d,"yyyymm")&"¦"'
+    '&pk&"!"&IF(ISNUMBER(SEARCH("RUNNER",r)),"R",IF(r="FLAG","F","O"))&TEXT(d,"yyyymm")&"¦"),'
     'nu&"§"&pk))),MAP(out,LAMBDA(x,IFERROR(REGEXEXTRACT(x,"§(.*)$"),""))))',
     N=N, CNT=N - 3, QS=",".join(NU_COLS), BAND=SLOT_BAND.replace("<POS>", "ps"),
     GRADE_OF_n=GRADE_OF.replace("<WHO>", "n"))
