@@ -57,6 +57,10 @@ TZ=UTC node tests/parser.check.cjs             # BDE-roster importer check (fict
 
 Local flag-detail policy: SFCs are not on the FLAG roster (rank band PVT-SSG). On flag slots, an available SSG is suggested first, in DA 6 order, and anyone else in the slot's grade band goes only when no SSG is available (**Flag detail: rank first** on Settings; blank turns it off). The grade band written in a slot's position (for example `E5-E6` or `NCOIC (E6)`) is enforced: suggestions stay inside it and Check flags `WRONG GRADE FOR SLOT`.
 
+Local overwork guard: **Max G2 details per Soldier per month** on Settings (default 2). Suggestions skip anyone already at the cap in that month unless no one else is available, and Check flags `OVER MONTHLY CAP`. A Soldier who served any G2 duty on a posting date is coded `D` on the other rosters that day, even if an exemption is on file (the exemption evidently did not apply).
+
+History: set **Roster FROM date** to the first month you have rosters for and enter those months' G2 slots and exemption-roster entries; the DA 6 numbers are rebuilt from that date.
+
 The regulation doesn't cover ties or rest between duties, so both are settings: **Tie-break** (fewest G2 details first, the default; or roster order; or junior first) and **Rest window**.
 
 Two documented choices: new Soldiers are sorted into grade order rather than added at the foot of the roster (para 5c says they *can* be added at the foot), and a performed duty is shown as `0` rather than a diagonal line (para 10b).

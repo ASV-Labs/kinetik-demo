@@ -80,7 +80,7 @@ T = {
     "PE_H": f"{PE}$H$4:$H${PEN}", "PE_ORD": f"{PE}${L_ORD}$4:${L_ORD}${PEN}",
     "PE_ELIG": f"{PE}${L_E1}$4:${L_E2}${PEN}", "PE_DET": f"{PE}${L_DET}$4:${L_DET}${PEN}",
     "START": f"{ST}$B$4", "REST": f"{ST}$B$5", "TIE": f"{ST}$B$6", "UNIT": f"{ST}$B$7",
-    "ASOF": f"{ST}$B$9", "LOOK": f"{ST}$B$10", "CYCLE": f"{ST}$B$11", "PSG": f"{ST}$B$12", "FLAGPREF": f"{ST}$B$18",
+    "ASOF": f"{ST}$B$9", "LOOK": f"{ST}$B$10", "CYCLE": f"{ST}$B$11", "PSG": f"{ST}$B$12", "FLAGPREF": f"{ST}$B$18", "MAXMO": f"{ST}$B$19",
     "HOL": f"{ST}$Y$4:$Y$60", "RANKTBL": f"{ST}$E$4:$H$40", "DUTYTBL": f"{ST}$P$4:$Q$30",
     "ABSTBL": f"{ST}$T$4:$V$40", "ROSTER_ARR": ROSTER_ARR,
     "MS": "'Dash Data'!$B$2", "ME": "'Dash Data'!$D$2",
@@ -193,7 +193,7 @@ banner(ws, "SETTINGS · lists, rules and lookups",
        "absence codes (DA PAM 220-45 para 7c: A / D / U only), holidays and the tracker registry.", 35)
 header_row(ws, 3, ["Setting", "Value", "Notes"])
 settings_rows = [
-    ("Roster FROM date", date(2026, 10, 1), "First posting date counted on every DA 6 (DA PAM 220-45 para 5a). Tracker history starts 1 Oct 26."),
+    ("Roster FROM date", getattr(S, "ROSTER_FROM", date(2026, 10, 1)), "First posting date counted on every DA 6 (DA PAM 220-45 para 5a)."),
     ("Rest window (days)", 1, "A Soldier with any other G2 duty within +/- this many days is coded D and is not suggested."),
     ("Tie-break (equal numbers)", "Fewest details", "DA PAM 220-45 is silent on ties. 'Fewest details' = fewest G2 details on Duty Slots, then roster order (spreads load when many Soldiers share a number); 'Roster order' = senior/alphabetical as listed; 'Junior first' = lowest grade first."),
     ("Unit label on BDE roster", "G2", "Slots labeled with this section/unit are G2's to fill (used by the importer)."),
@@ -209,6 +209,8 @@ settings_rows = [
     ("Brief marking (optional)", None, "Banner text for the one-slider (top and footer), per your unit SOP. Blank = none."),
     ("Flag detail: rank first", "SSG", "Local policy. On FLAG slots, an available Soldier of this rank is suggested before anyone else "
      "in the slot's grade band (for example E5-E6), in DA 6 order. Others go only when none is available. Blank = DA 6 order only."),
+    ("Max G2 details per Soldier per month", 2, "Local policy against overwork. Suggestions skip anyone who already has this many G2 details "
+     "in the slot's month, unless no one else is available; Check flags OVER MONTHLY CAP. Blank = no cap."),
 ]
 for i, (k, v, n) in enumerate(settings_rows, start=4):
     ws.cell(row=i, column=1, value=k).font = font(10, True)
@@ -432,6 +434,7 @@ ws["L4"] = F(
     'rq,IFERROR(INDEX(FILTER(<AV_E>,<AV_A>=f,<AV_C><=p,<AV_M>>=a,<AV_J>="N"),1),""),'
     'm,TEXTJOIN(" · ",TRUE,IF(onp,"","NOT ON PERSONNEL"),IF(el,"","OUTSIDE RANK BAND / EXCLUDED"),'
     'IF(sg,"","WRONG GRADE FOR SLOT (E"&lo&IF(hi>lo,"-E"&hi,"")&")"),'
+    'IF(OR(<MAXMO>="",COUNTIFS(<SL_F>,f,<SL_A>,">="&(EOMONTH(a,-1)+1),<SL_A>,"<="&EOMONTH(a,0),<SL_G>,"<>Cancelled")<=<MAXMO>),"","OVER MONTHLY CAP"),'
     'IF(ov>1,"DOUBLE-TASKED",""),IF(rs>ov,"BACK-TO-BACK",""),IF(ab="","","UNAVAILABLE: "&ab),'
     'IF(rq="","","REQUEST: "&rq)),IF(m="","✓ OK","⚠ "&m)))))))', N=N,
     BAND=SLOT_BAND.replace("<POS>", "e"), GRADE_OF_f=GRADE_OF.replace("<WHO>", "f"))
@@ -445,17 +448,21 @@ ws["M4"] = F(
     'ok,AND(d<>"",INDEX(F4:F<N>,i)="",INDEX(G4:G<N>,i)<>"Cancelled",ISNUMBER(MATCH(r,<ROSTER_ARR>,0))),'
     'pk,IF(NOT(ok),"",IF(d<<ASOF>,"(past date)",IFERROR(LET(q,CHOOSE(MATCH(r,<ROSTER_ARR>,0),<QS>),'
     'pe,INDEX(P4:P<N>,i),ps,INDEX(E4:E<N>,i),<BAND>,'
-    'cand,FILTER(q,MAP(q,LAMBDA(n,IF(n="",FALSE,AND('
+    'mk,"#"&TEXT(d,"yyyymm")&"¦",'
+    'cand0,FILTER(q,MAP(q,LAMBDA(n,IF(n="",FALSE,AND('
     'OR(lo=0,LET(gq,<GRADE_OF_n>,AND(gq>=lo,gq<=hi))),'
     'COUNTIFS(<AV_A>,n,<AV_C>,"<="&pe,<AV_M>,">="&d,<AV_J>,"Y")=0,'
     'COUNTIFS(<SL_F>,n,<SL_A>,"<="&(pe+<REST>),<SL_P>,">="&(d-<REST>),<SL_G>,"<>Cancelled")=0,'
     'ISERROR(FIND("¦"&r&":"&n&"¦",used)),'
     'SUMPRODUCT(--ISNUMBER(FIND("¦"&n&"@"&(d+SEQUENCE(2*<REST>+1,1,-<REST>))&"¦",used)))=0))))),'
+    'cand,IF(<MAXMO>="",cand0,IFERROR(FILTER(cand0,MAP(cand0,LAMBDA(n,'
+    'COUNTIFS(<SL_F>,n,<SL_A>,">="&(EOMONTH(d,-1)+1),<SL_A>,"<="&EOMONTH(d,0),<SL_G>,"<>Cancelled")'
+    '+(LEN(used)-LEN(SUBSTITUTE(used,"¦"&n&mk,"")))/LEN("¦"&n&mk)<<MAXMO>))),cand0)),'
     'sp,IF(OR(r<>"FLAG",<FLAGPREF>=""),"",IFERROR(INDEX(FILTER(cand,MAP(cand,LAMBDA(n,'
     'IFERROR(VLOOKUP(n,<PE_BC>,2,FALSE),"")=<FLAGPREF>))),1),"")),'
     'IF(sp<>"",sp,INDEX(cand,1))),'
     '"⚠ none available"))),'
-    'nu,IF(OR(pk="",LEFT(pk,1)="⚠",LEFT(pk,1)="("),used,used&"¦"&r&":"&pk&"¦"&pk&"@"&d&"¦"),'
+    'nu,IF(OR(pk="",LEFT(pk,1)="⚠",LEFT(pk,1)="("),used,used&"¦"&r&":"&pk&"¦"&pk&"@"&d&"¦"&pk&"#"&TEXT(d,"yyyymm")&"¦"),'
     'nu&"§"&pk))),MAP(out,LAMBDA(x,IFERROR(REGEXEXTRACT(x,"§(.*)$"),""))))',
     N=N, CNT=N - 3, QS=",".join(NU_COLS), BAND=SLOT_BAND.replace("<POS>", "ps"),
     GRADE_OF_n=GRADE_OF.replace("<WHO>", "n"))
@@ -551,10 +558,11 @@ for idx, (key, tab, mn, mx, nature) in enumerate(S.ROSTERS):
         '=LET(nr,COUNTIF($B$8:$B$127,"?*"),nc,COUNT($<G1>$4:$<G2>$4),IF(OR(nr=0,nc=0),"",MAKEARRAY(nr,nc,LAMBDA(i,j,'
         'LET(n,INDEX($B$8:$B$127,i),d,INDEX($<G1>$4:$<G2>$4,1,j),'
         'IF(COUNTIFS(<SL_F>,n,<SL_A>,d,<SL_J>,"<KEY>",<SL_G>,"<>Cancelled")>0,"X",'
+        'IF(COUNTIFS(<SL_F>,n,<SL_A>,"<="&d,<SL_P>,">="&d,<SL_G>,"<>Cancelled")>0,"D",'
         'IF(COUNTIFS(<AV_A>,n,<AV_C>,"<="&d,<AV_M>,">="&d,<AV_I>,"A")>0,"A",'
         'IF(COUNTIFS(<AV_A>,n,<AV_C>,"<="&d,<AV_M>,">="&d,<AV_I>,"U")>0,"U",'
         'IF(COUNTIFS(<AV_A>,n,<AV_C>,"<="&d,<AV_M>,">="&d,<AV_I>,"D")+COUNTIFS(<SL_F>,n,<SL_A>,"<="&(d+<REST>),'
-        '<SL_P>,">="&(d-<REST>),<SL_G>,"<>Cancelled")>0,"D","-")))))))))',
+        '<SL_P>,">="&(d-<REST>),<SL_G>,"<>Cancelled")>0,"D","-"))))))))))',
         G1=G1L, G2=G2L, KEY=key)
     cnt_core = ('IF(L=0,INDEX($E$8:$E$127,i),0)+SUMPRODUCT((idx>L)*(idx<=j)*(s<>"A")*(s<>"X")*$<G1>$3:$<G2>$3)')
     ws[f"{G1L}8"] = F(
