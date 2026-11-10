@@ -62,16 +62,18 @@ NU_LAST = CL(NU_W * NR - 1)
 # ----------------------------------------------------------------------------
 # Range tokens (bounded ranges keep recalculation fast)
 # ----------------------------------------------------------------------------
-SLN, AVN, PEN = 1000, 1000, 400
+SLN, AVN, PEN, JNN = 1000, 1000, 400, 200
 SL = "'Duty Slots'!"
 AV = "Availability!"
 PE = "Personnel!"
 ST = "Settings!"
+JN = "'Roster Joins'!"
 T = {
     "SL_A": f"{SL}$A$4:$A${SLN}", "SL_B": f"{SL}$B$4:$B${SLN}", "SL_D": f"{SL}$D$4:$D${SLN}",
     "SL_E": f"{SL}$E$4:$E${SLN}", "SL_F": f"{SL}$F$4:$F${SLN}", "SL_G": f"{SL}$G$4:$G${SLN}",
     "SL_H": f"{SL}$H$4:$H${SLN}", "SL_I": f"{SL}$I$4:$I${SLN}", "SL_J": f"{SL}$J$4:$J${SLN}",
     "SL_L": f"{SL}$L$4:$L${SLN}", "SL_M": f"{SL}$M$4:$M${SLN}", "SL_P": f"{SL}$P$4:$P${SLN}", "SL_Q": f"{SL}$Q$4:$Q${SLN}",
+    "JN_A": f"{JN}$A$4:$A${JNN}", "JN_B": f"{JN}$B$4:$B${JNN}", "JN_C": f"{JN}$C$4:$C${JNN}",
     "AV_A": f"{AV}$A$4:$A${AVN}", "AV_B": f"{AV}$B$4:$B${AVN}", "AV_C": f"{AV}$C$4:$C${AVN}",
     "AV_D": f"{AV}$D$4:$D${AVN}", "AV_E": f"{AV}$E$4:$E${AVN}", "AV_G": f"{AV}$G$4:$G${AVN}",
     "AV_H": f"{AV}$H$4:$H${AVN}", "AV_I": f"{AV}$I$4:$I${AVN}", "AV_J": f"{AV}$J$4:$J${AVN}",
@@ -183,11 +185,11 @@ def base_font(ws, r1, r2, c1, c2):
 wb = Workbook()
 wb.remove(wb.active)
 TABS = ["Dashboard", "Duty Slots", "Conflicts", "Next Up"] + [r[1] for r in S.ROSTERS] + [
-    "Personnel", "Availability", "Appointments", "Equipment", "Taskings", "Settings",
+    "Personnel", "Availability", "Roster Joins", "Appointments", "Equipment", "Taskings", "Settings",
     "Dash Data"]
 WS = {name: wb.create_sheet(name) for name in TABS}
 TAB_COLOR = {"Dashboard": NAVY, "Duty Slots": "EDA100", "Conflicts": "C77700", "Next Up": "1BAF7A", "Personnel": SLATE,
-             "Availability": SLATE, "Appointments": "6250D6", "Equipment": "6250D6",
+             "Availability": SLATE, "Roster Joins": SLATE, "Appointments": "6250D6", "Equipment": "6250D6",
              "Taskings": "6250D6", "Settings": "7F7F7F", "Dash Data": "BFBFBF"}
 for r in S.ROSTERS:
     TAB_COLOR[r[1]] = "2A78D6"
@@ -412,6 +414,24 @@ ws.freeze_panes = "B4"
 ws.auto_filter.ref = f"A3:L{N}"
 
 # ============================================================================
+# ROSTER JOINS (a Soldier added to a DA 6 part-way: promotion, new arrival)
+# ============================================================================
+ws = WS["Roster Joins"]
+banner(ws, "ROSTER JOINS · when a Soldier came onto a DA 6",
+       "For a Soldier who joins a DA 6 after it started (promoted into its rank band, or newly assigned). Before this date the "
+       "DA 6 shows A for them, so they are charged only with details made while they were on it (DA PAM 220-45 para 7b).", 4)
+header_row(ws, 3, ["Soldier", "DA 6 roster", "On this DA 6 from", "Reason"], None, [30, 14, 16, 60])
+for i, (n, r, d, why) in enumerate(getattr(S, "ROSTER_JOINS", []), start=4):
+    ws.cell(row=i, column=1, value=n)
+    ws.cell(row=i, column=2, value=r)
+    ws.cell(row=i, column=3, value=d)
+    ws.cell(row=i, column=4, value=why)
+date_fmt(ws, ["C"], 4, JNN, "dd mmm yy")
+dv_list(ws, f"{T['PE_B']}", f"A4:A{JNN}")
+dv_list(ws, '"' + ",".join(r[0] for r in S.ROSTERS) + '"', f"B4:B{JNN}")
+ws.freeze_panes = "A4"
+
+# ============================================================================
 # DUTY SLOTS
 # ============================================================================
 ws = WS["Duty Slots"]
@@ -603,11 +623,12 @@ for idx, (key, tab, mn, mx, nature) in enumerate(S.ROSTERS):
         '=LET(nr,COUNTIF($B$8:$B$127,"?*"),nc,COUNT($<G1>$4:$<G2>$4),IF(OR(nr=0,nc=0),"",MAKEARRAY(nr,nc,LAMBDA(i,j,'
         'LET(n,INDEX($B$8:$B$127,i),d,INDEX($<G1>$4:$<G2>$4,1,j),'
         'IF(COUNTIFS(<SL_F>,n,<SL_A>,d,<SL_J>,"<KEY>",<SL_G>,"<>Cancelled")>0,"X",'
+        'IF(d<MAXIFS(<JN_C>,<JN_A>,n,<JN_B>,"<KEY>"),"A",'
         'IF(COUNTIFS(<SL_F>,n,<SL_A>,"<="&d,<SL_Q>,">="&d,<SL_G>,"<>Cancelled")>0,"D",'
         'IF(COUNTIFS(<AV_A>,n,<AV_C>,"<="&d,<AV_M>,">="&d,<AV_I>,"A")>0,"A",'
         'IF(COUNTIFS(<AV_A>,n,<AV_C>,"<="&d,<AV_M>,">="&d,<AV_I>,"U")>0,"U",'
         'IF(COUNTIFS(<AV_A>,n,<AV_C>,"<="&d,<AV_M>,">="&d,<AV_I>,"D")+COUNTIFS(<SL_F>,n,<SL_A>,"<="&(d+<REST>),'
-        '<SL_P>,">="&(d-<REST>),<SL_G>,"<>Cancelled")>0,"D","-"))))))))))',
+        '<SL_P>,">="&(d-<REST>),<SL_G>,"<>Cancelled")>0,"D","-")))))))))))',
         G1=G1L, G2=G2L, KEY=key)
     cnt_core = ('IF(L=0,INDEX($E$8:$E$127,i),0)+SUMPRODUCT((idx>L)*(idx<=j)*(s<>"A")*(s<>"X")*$<G1>$3:$<G2>$3)')
     ws[f"{G1L}8"] = F(
