@@ -232,7 +232,9 @@ settings_rows = [
      "falls on, the Soldier works into the next morning (about 0900), has the rest of that next day off, and is back the day "
      "after (e.g. duty Thursday, off Friday, back Saturday). Always counted from the duty date, never a fixed weekday. Nothing "
      "else is suggested on the day off, whatever the rest window; with the default 1-day rest window the day after that is "
-     "open. Check flags ON DAY OFF AFTER OVERNIGHT DUTY; the day off codes D on other DA 6s."),
+     "open. Check flags ON DAY OFF AFTER OVERNIGHT DUTY; the day off codes D on other DA 6s. Leave, pass or any other "
+     "blocking absence that starts the morning the duty ends also rules the Soldier out (duty the 20th, leave from the "
+     "21st: not allowed); Check flags UNAVAILABLE and nobody on leave the next day is suggested."),
 ]
 for i, (k, v, n) in enumerate(settings_rows, start=4):
     ws.cell(row=i, column=1, value=k).font = font(10, True)
@@ -477,8 +479,8 @@ ws["L4"] = F(
     'ov,COUNTIFS(<SL_F>,f,<SL_A>,"<="&p,<SL_P>,">="&a,<SL_G>,"<>Cancelled"),'
     'ovo,COUNTIFS(<SL_F>,f,<SL_A>,"<="&q,<SL_Q>,">="&a,<SL_G>,"<>Cancelled"),'
     'rs,COUNTIFS(<SL_F>,f,<SL_A>,"<="&(p+<REST>),<SL_P>,">="&(a-<REST>),<SL_G>,"<>Cancelled"),'
-    'ab,IFERROR(INDEX(FILTER(<AV_B>,<AV_A>=f,<AV_C><=p,<AV_M>>=a,<AV_J>="Y"),1),""),'
-    'rq,IFERROR(INDEX(FILTER(<AV_E>,<AV_A>=f,<AV_C><=p,<AV_M>>=a,<AV_J>="N"),1),""),'
+    'ab,IFERROR(INDEX(FILTER(<AV_B>,<AV_A>=f,<AV_C><=q,<AV_M>>=a,<AV_J>="Y"),1),""),'
+    'rq,IFERROR(INDEX(FILTER(<AV_E>,<AV_A>=f,<AV_C><=q,<AV_M>>=a,<AV_J>="N"),1),""),'
     'isr,ISNUMBER(SEARCH("RUNNER",r)),'
     'rn,COUNTIFS(<SL_F>,f,<SL_J>,"*RUNNER*",<SL_A>,">="&(EOMONTH(a,-1)+1),<SL_A>,"<="&EOMONTH(a,0),<SL_G>,"<>Cancelled"),'
     'fl,COUNTIFS(<SL_F>,f,<SL_J>,"FLAG",<SL_A>,">="&(EOMONTH(a,-1)+1),<SL_A>,"<="&EOMONTH(a,0),<SL_G>,"<>Cancelled"),'
@@ -506,7 +508,7 @@ ws["M4"] = F(
     'flm,LAMBDA(n,COUNTIFS(<SL_F>,n,<SL_J>,"FLAG",<SL_A>,">="&(EOMONTH(d,-1)+1),<SL_A>,"<="&EOMONTH(d,0),<SL_G>,"<>Cancelled")+(LEN(used)-LEN(SUBSTITUTE(used,"¦"&n&"!F"&ym&"¦","")))/LEN("¦"&n&"!F"&ym&"¦")),'
     'cand0,FILTER(q,MAP(q,LAMBDA(n,IF(n="",FALSE,AND('
     'OR(lo=0,LET(gq,<GRADE_OF_n>,AND(gq>=lo,gq<=hi))),'
-    'COUNTIFS(<AV_A>,n,<AV_C>,"<="&pe,<AV_M>,">="&d,<AV_J>,"Y")=0,'
+    'COUNTIFS(<AV_A>,n,<AV_C>,"<="&qe,<AV_M>,">="&d,<AV_J>,"Y")=0,'
     'COUNTIFS(<SL_F>,n,<SL_A>,"<="&(pe+<REST>),<SL_P>,">="&(d-<REST>),<SL_G>,"<>Cancelled")=0,'
     'COUNTIFS(<SL_F>,n,<SL_A>,"<="&qe,<SL_Q>,">="&d,<SL_G>,"<>Cancelled")=0,'
     'ISERROR(FIND("¦"&r&":"&n&"¦",used)),'
